@@ -1,0 +1,55 @@
+name: Stage Validation
+
+on:
+  issues:
+    types: [edited]
+
+jobs:
+  check-checklist:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Check Checklist Completion
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+
+            // Count checkboxes
+            const checkedBoxes = (body.match(/- \[x\]/gi) || []).length;
+            const uncheckedBoxes = (body.match(/- \[ \]/g) || []).length;
+            const totalBoxes = checkedBoxes + uncheckedBoxes;
+
+            // Get current labels
+            const currentLabels = issue.labels.map(l => l.name);
+            const hasReadyLabel = currentLabels.includes('status:ready-for-review');
+
+            // If all boxes checked and doesn't have ready label, add it
+            if (totalBoxes > 0 && uncheckedBoxes === 0 && !hasReadyLabel) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: ['status:ready-for-review']
+              });
+
+              // Add a comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: '✅ **All checklist items completed!**\n\nThis idea is ready for review and stage transition. An admin will review shortly.'
+              });
+            }
+
+            // If boxes unchecked and has ready label, remove it
+            if (uncheckedBoxes > 0 && hasReadyLabel) {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                name: 'status:ready-for-review'
+              });
+            }

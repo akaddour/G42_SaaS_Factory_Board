@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Workflow Documentation
+    url: https://github.com/akaddour/G42_SaaS_Factory_Board/blob/main/docs/workflow-guide.md
+    about: Learn about the SaaS Framework stages and process
+  - name: Stage Criteria
+    url: https://github.com/akaddour/G42_SaaS_Factory_Board/blob/main/docs/stage-criteria.md
+    about: Understand the criteria for each stage

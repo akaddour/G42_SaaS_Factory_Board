@@ -1,0 +1,69 @@
+name: Auto Label Issues
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  add-bu-label:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Add BU Label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+
+            // Map BU names to labels
+            const buMapping = {
+              'Presight': 'bu:presight',
+              'Analog': 'bu:analog',
+              'Core42': 'bu:core42',
+              'M42': 'bu:m42',
+              'Inception': 'bu:inception',
+              'Astratech': 'bu:astratech',
+              'Khazna Data Centers': 'bu:khazna',
+              'AIQ': 'bu:aiq',
+              'CPX': 'bu:cpx',
+              'Space42': 'bu:space42'
+            };
+
+            // Map idea types to labels
+            const typeMapping = {
+              'Greenfield': 'type:greenfield',
+              'Brownfield': 'type:brownfield',
+              'White-label': 'type:whitelabel'
+            };
+
+            const labelsToAdd = [];
+
+            // Find BU in issue body
+            for (const [bu, label] of Object.entries(buMapping)) {
+              if (body.includes(bu)) {
+                labelsToAdd.push(label);
+                break;
+              }
+            }
+
+            // Find idea type in issue body
+            for (const [type, label] of Object.entries(typeMapping)) {
+              if (body.includes(type)) {
+                labelsToAdd.push(label);
+                break;
+              }
+            }
+
+            // Add stakeholder label (BU is always the lead in Ideate)
+            labelsToAdd.push('stakeholder:bu');
+
+            if (labelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: labelsToAdd
+              });
+            }

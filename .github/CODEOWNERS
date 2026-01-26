@@ -1,0 +1,11 @@
+# G42 SaaS Factory Board - Code Owners
+# These owners will be requested for review when PRs are opened
+
+# Default owners for everything
+* @akaddour
+
+# Documentation
+/docs/ @akaddour
+
+# Workflow files
+/.github/workflows/ @akaddour

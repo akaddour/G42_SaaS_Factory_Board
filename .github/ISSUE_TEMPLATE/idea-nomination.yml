@@ -1,0 +1,120 @@
+name: Idea Nomination
+description: Submit a new SaaS product idea for evaluation
+title: "[IDEA] "
+labels: ["stage:ideate"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## SaaS Product Idea Nomination
+        Thank you for submitting a new idea! Please fill out all required fields below.
+
+  - type: dropdown
+    id: business-unit
+    attributes:
+      label: Business Unit
+      description: Which BU is submitting this idea?
+      options:
+        - Presight
+        - Analog
+        - Core42
+        - M42
+        - Inception
+        - Astratech
+        - Khazna Data Centers
+        - AIQ
+        - CPX
+        - Space42
+    validations:
+      required: true
+
+  - type: dropdown
+    id: idea-type
+    attributes:
+      label: Idea Type
+      description: What type of idea is this?
+      options:
+        - Greenfield (New idea)
+        - Brownfield (SaaSify existing project)
+        - White-label (Partner white-labeling)
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-statement
+    attributes:
+      label: Problem Statement
+      description: What problem does this idea solve?
+      placeholder: Describe the problem or opportunity this idea addresses...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: How does your idea solve this problem?
+      placeholder: Describe your proposed solution...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: business-value
+    attributes:
+      label: Expected Business Value
+      description: What is the expected business impact?
+      options:
+        - High (>$10M potential)
+        - Medium ($1M-$10M potential)
+        - Low (<$1M potential)
+    validations:
+      required: true
+
+  - type: textarea
+    id: target-market
+    attributes:
+      label: Target Market / Customers
+      description: Who are the target customers for this product?
+      placeholder: Describe the target market and customer segments...
+    validations:
+      required: true
+
+  - type: textarea
+    id: resource-estimate
+    attributes:
+      label: Initial Resource Estimate
+      description: What resources would be needed? (team size, timeline, technology)
+      placeholder: Provide rough estimates of required resources...
+    validations:
+      required: false
+
+  - type: input
+    id: submitter-name
+    attributes:
+      label: Submitter Name
+      description: Your name
+      placeholder: John Doe
+    validations:
+      required: true
+
+  - type: input
+    id: submitter-email
+    attributes:
+      label: Submitter Email
+      description: Your email address
+      placeholder: john.doe@g42.ai
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ## Ideate Stage Checklist
+        *To be completed during the Ideate phase:*
+
+        - [ ] Clear problem statement defined
+        - [ ] Business value articulated
+        - [ ] Initial market sizing done
+        - [ ] BU sponsor identified
+        - [ ] Group template filled
