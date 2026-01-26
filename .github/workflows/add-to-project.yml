@@ -4,12 +4,40 @@ on:
   issues:
     types: [opened]
 
+env:
+  PROJECT_ID: "PVT_kwHOALNmH84BNitD"
+  STAGE_FIELD_ID: "PVTSSF_lAHOALNmH84BNitDzg8gaUE"
+  BACKLOG_OPTION_ID: "c14ac672"
+
 jobs:
   add-to-project:
     runs-on: ubuntu-latest
     steps:
       - name: Add issue to project
+        id: add-to-project
         uses: actions/add-to-project@v1.0.2
         with:
           project-url: https://github.com/users/akaddour/projects/7
           github-token: ${{ secrets.PROJECT_TOKEN }}
+
+      - name: Set Stage to Backlog
+        if: steps.add-to-project.outputs.itemId
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+        run: |
+          gh api graphql -f query='
+            mutation {
+              updateProjectV2ItemFieldValue(
+                input: {
+                  projectId: "${{ env.PROJECT_ID }}"
+                  itemId: "${{ steps.add-to-project.outputs.itemId }}"
+                  fieldId: "${{ env.STAGE_FIELD_ID }}"
+                  value: { singleSelectOptionId: "${{ env.BACKLOG_OPTION_ID }}" }
+                }
+              ) {
+                projectV2Item {
+                  id
+                }
+              }
+            }
+          '
