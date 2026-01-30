@@ -73,7 +73,7 @@ Certain conditions trigger an automatic HOLD regardless of the scorecard result.
 
 ### Submitting a New Idea
 
-1. **Via Microsoft Forms** (Recommended): Submit through the [Idea Nomination Form](#) -- automatically creates a GitHub issue
+1. **Via Microsoft Forms** (Recommended): Submit through the [Idea Nomination Form](https://forms.cloud.microsoft/r/GEFTydzj2V) -- automatically creates a GitHub issue
 2. **Via GitHub**: Create a new issue using the "Idea Nomination" template
 
 ### Tracking Ideas
