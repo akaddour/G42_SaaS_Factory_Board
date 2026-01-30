@@ -1,0 +1,630 @@
+name: Stage Gate Transition
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  stage-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Handle Stage Transition
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const labelAdded = context.payload.label.name;
+            const body = issue.body || '';
+            const currentLabels = issue.labels.map(l => l.name);
+
+            // Only process stage labels
+            if (!labelAdded.startsWith('stage:')) return;
+
+            // Define stage order and previous stage mapping
+            const stageOrder = ['stage:ideate', 'stage:validate', 'stage:build', 'stage:sell', 'stage:review'];
+            const previousStage = {
+              'stage:validate': 'stage:ideate',
+              'stage:build': 'stage:validate',
+              'stage:sell': 'stage:build',
+              'stage:review': 'stage:sell'
+            };
+
+            // Stakeholder lead per stage
+            const stakeholderMap = {
+              'stage:ideate': 'stakeholder:bu',
+              'stage:validate': 'stakeholder:group',
+              'stage:build': 'stakeholder:bu',
+              'stage:sell': 'stakeholder:bu',
+              'stage:review': 'stakeholder:group'
+            };
+
+            // Helper: count checked/unchecked checkboxes in text
+            function checklistStatus(text) {
+              const checked = (text.match(/- \[x\]/gi) || []).length;
+              const unchecked = (text.match(/- \[ \]/g) || []).length;
+              return { checked, unchecked, total: checked + unchecked };
+            }
+
+            // Helper: get all comments on the issue
+            async function getComments() {
+              const comments = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                per_page: 100
+              });
+              return comments.data;
+            }
+
+            // Helper: find checklist completion in issue body + comments
+            async function findStageChecklist(stageName) {
+              // Check issue body first
+              const bodyStatus = checklistStatus(body);
+
+              // Check comments for stage-specific checklists
+              const comments = await getComments();
+              for (const comment of comments) {
+                if (comment.body.includes(`${stageName} Stage`) || comment.body.includes(`${stageName} Checklist`)) {
+                  const status = checklistStatus(comment.body);
+                  if (status.total > 0) return status;
+                }
+              }
+
+              // Fall back to issue body
+              return bodyStatus;
+            }
+
+            // === GATE CHECKS ===
+
+            // Gate: Ideate → Validate
+            if (labelAdded === 'stage:validate') {
+              const status = await findStageChecklist('Ideate');
+
+              if (status.total > 0 && status.unchecked > 0) {
+                // Block transition
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:validate'
+                });
+
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['status:needs-info']
+                });
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `⛔ **Stage transition blocked: Ideate → Validate**\n\nThe Ideate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Ideate checklist items before transitioning to Validate.`
+                });
+                return;
+              }
+
+              // Remove old stage label
+              if (currentLabels.includes('stage:ideate')) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:ideate'
+                });
+              }
+
+              // Update stakeholder label
+              for (const sl of ['stakeholder:bu', 'stakeholder:group', 'stakeholder:msft']) {
+                if (currentLabels.includes(sl)) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issue.number,
+                      name: sl
+                    });
+                  } catch (e) {}
+                }
+              }
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [stakeholderMap['stage:validate']]
+              });
+
+              // Remove ready-for-review if present
+              if (currentLabels.includes('status:ready-for-review')) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    name: 'status:ready-for-review'
+                  });
+                } catch (e) {}
+              }
+
+              // Post Validate stage checklist
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `## ✅ Transitioned to Validate Stage
+
+            **Lead:** Group | **Support:** BUs, Microsoft
+
+            ---
+
+            ## Validate Stage Checklist
+
+            ### Prioritization Scorecard (14 criteria, scored 0–5, weighted to 100 pts)
+
+            #### Market & Strategic Fit
+            - [ ] **1. Problem severity & urgency** (Score: /5) — Validated pain; urgency drivers; clear buyer
+            - [ ] **2. Repeatability across customers** (Score: /5) — Clear repeatable use case; not bespoke
+            - [ ] **3. Design partners / pipeline evidence** (Score: /5) — 2–3 design partners or credible pipeline
+            - [ ] **4. Strategic alignment** (Score: /5) — Aligned to priority verticals / strategic mandates
+
+            #### Commercial & Economics
+            - [ ] **5. Pricing power / willingness to pay** (Score: /5) — WTP signal; pricing band tested
+            - [ ] **6. Margin potential (COGS + cost-to-serve)** (Score: /5) — COGS drivers understood; GM path
+            - [ ] **7. Sales motion feasibility** (Score: /5) — Direct/partner/co-sell path defined
+
+            #### Technical & Delivery Feasibility
+            - [ ] **8. SaaS readiness / complexity** (Score: /5) — Track A/B decided; key epics identified
+            - [ ] **9. Security & compliance feasibility** (Score: /5) — Threat model v1; control mapping; evidence plan
+            - [ ] **10. Operability (SRE readiness)** (Score: /5) — SLOs, DR approach, run ownership feasible
+            - [ ] **11. Integration complexity** (Score: /5) — Integration map; known dependencies
+
+            #### Partnership Leverage (Microsoft/ISE)
+            - [ ] **12. Microsoft field verification strength** (Score: /5) — Field input; account relevance; objections
+            - [ ] **13. Marketplace readiness path clarity** (Score: /5) — Listing requirements and path understood
+            - [ ] **14. ISE accelerator fit / engineering leverage** (Score: /5) — ISE scope/accelerators identified
+
+            ---
+
+            ### Validation Templates (attach as comments or linked documents)
+            - [ ] **Template 2:** Market Verification Pack completed (G42 + Microsoft)
+            - [ ] **Template 3:** Technical Evaluation Pack completed
+            - [ ] **Template 4:** Business Plan (Lite) completed
+            - [ ] **Template 5:** Final Recommendation Memo (Gate Decision Record) completed
+
+            ---
+
+            ### Red-Flag Check (any unresolved = auto HOLD)
+            - [ ] Viable tenancy / data isolation approach exists
+            - [ ] Design partner or pilot path confirmed (credible customer access)
+            - [ ] Accountable product owner assigned (not unowned)
+            - [ ] Unit economics not structurally negative (mitigation path exists)
+
+            ---
+
+            ### Gate Decision
+            > Admin: apply one of the following labels when the decision is made:
+            > - \`decision:go-fast-track\` — GO: Fast-track to Build
+            > - \`decision:go-modernize\` — GO: Modernize-first
+            > - \`decision:hold\` — HOLD until conditions resolved
+            > - \`decision:kill\` — KILL: idea not viable
+
+            **Decision notes / conditions / dependencies:**
+            _[To be filled by reviewer]_`
+              });
+            }
+
+            // Gate: Validate → Build
+            if (labelAdded === 'stage:build') {
+              // Check for GO decision label
+              const hasGoDecision = currentLabels.some(l => l.startsWith('decision:go'));
+              const hasRedFlag = currentLabels.includes('status:red-flag');
+
+              if (!hasGoDecision) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:build'
+                });
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `⛔ **Stage transition blocked: Validate → Build**\n\nA GO decision label is required before moving to Build.\n\nPlease apply one of:\n- \`decision:go-fast-track\`\n- \`decision:go-modernize\`\n\nIf the idea is not approved, apply \`decision:hold\` or \`decision:kill\` instead.`
+                });
+                return;
+              }
+
+              if (hasRedFlag) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:build'
+                });
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `⛔ **Stage transition blocked: Validate → Build**\n\nA \`status:red-flag\` override is active. Red-flag issues must be resolved before proceeding to Build.\n\n**Red-flag overrides (auto HOLD until resolved):**\n- No viable tenancy or data isolation approach for target segment\n- No design partner or pilot path (no credible customer access)\n- No accountable product owner (unowned initiative)\n- Unit economics structurally negative with no mitigation path\n\nRemove the \`status:red-flag\` label once all issues are resolved.`
+                });
+                return;
+              }
+
+              // Check Validate checklist completion
+              const status = await findStageChecklist('Validate');
+              if (status.total > 0 && status.unchecked > 0) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:build'
+                });
+
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['status:needs-info']
+                });
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `⛔ **Stage transition blocked: Validate → Build**\n\nThe Validate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Validate checklist items before transitioning to Build.`
+                });
+                return;
+              }
+
+              // Remove old stage label
+              if (currentLabels.includes('stage:validate')) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:validate'
+                });
+              }
+
+              // Update stakeholder label
+              for (const sl of ['stakeholder:bu', 'stakeholder:group', 'stakeholder:msft']) {
+                if (currentLabels.includes(sl)) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issue.number,
+                      name: sl
+                    });
+                  } catch (e) {}
+                }
+              }
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [stakeholderMap['stage:build']]
+              });
+
+              if (currentLabels.includes('status:ready-for-review')) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    name: 'status:ready-for-review'
+                  });
+                } catch (e) {}
+              }
+
+              // Post Build stage checklist (Product Intake Checklist)
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `## ✅ Transitioned to Build Stage
+
+            **Lead:** BUs | **Support:** Group (ISE Engineers), Microsoft (Co-build, PLG)
+
+            ---
+
+            ## Build Stage — Product Intake Checklist
+
+            ### Business
+            - [ ] Problem statement & ICP defined (Must, Owner: G42)
+            - [ ] Market validation evidence (Should, Owner: Affiliate)
+            - [ ] Product positioning & messaging (Must, Owner: G42)
+            - [ ] Regulatory constraints identified (Must, Owner: Affiliate)
+
+            ### Product Management
+            - [ ] Product strategy & 12–18 month roadmap (Must, Owner: G42)
+            - [ ] PRD / user journeys / backlog (Must, Owner: Affiliate)
+            - [ ] Stage-gate plan and launch readiness checklist (Must, Owner: G42)
+
+            ### Technology
+            - [ ] Target architecture for Azure SaaS (Must, Owner: Affiliate)
+            - [ ] Tenancy model selected (Must, Owner: G42)
+            - [ ] Data partitioning and access controls (Must, Owner: Affiliate)
+            - [ ] API strategy & versioning (Should, Owner: G42)
+
+            ### DevOps
+            - [ ] CI/CD pipeline aligned to golden pipeline (Must, Owner: G42)
+            - [ ] Infrastructure as Code (IaC) & landing zones (Must, Owner: G42)
+            - [ ] Observability implemented (Must, Owner: Affiliate)
+            - [ ] DR/BCP and RTO/RPO defined and tested (Should, Owner: Affiliate)
+
+            ### Security
+            - [ ] Security baseline alignment (Must, Owner: G42)
+            - [ ] Threat model completed and reviewed (Must, Owner: G42)
+            - [ ] Pen test / vulnerability remediation plan (Must, Owner: Affiliate)
+            - [ ] Compliance mapping & evidence pack (Should, Owner: G42)
+
+            ### Finance
+            - [ ] Business case & unit economics (Must, Owner: G42)
+            - [ ] FinOps controls configured (Should, Owner: G42)
+
+            ### Commercials
+            - [ ] SKU packaging & tiering (Must, Owner: G42)
+            - [ ] Metering & billing instrumentation (Must, Owner: G42)
+            - [ ] Contract set ready — MSA/DPA/SLA/order form (Must, Owner: G42)
+            - [ ] Support model and SLAs (Must, Owner: Affiliate)
+
+            ### Operations
+            - [ ] Runbooks and operational readiness review (Should, Owner: Affiliate)
+            - [ ] Customer onboarding & provisioning workflow (Should, Owner: G42)
+
+            ---
+
+            ### Product Documentation Pack (for GO)
+            - [ ] Product one-pager (problem, ICP, value, KPIs)
+            - [ ] PRD-lite (MVP scope, journeys, acceptance criteria)
+            - [ ] Architecture outline + tenancy decision record
+            - [ ] Security feasibility pack (threat model v1 + evidence plan)
+            - [ ] Commercial spec (pricing/packaging v1 + tier definitions)
+            - [ ] Delivery plan (milestones, resourcing, risks, dependencies)
+            - [ ] Operational readiness plan (SLOs, DR, runbooks, support model)
+            - [ ] Marketplace readiness plan (if applicable)
+
+            ---
+
+            ### Product Roadmap (12–18 months)
+            - [ ] MVP phase (0–90 days) — outcome, capabilities, milestones, dependencies
+            - [ ] GA phase (90–180 days) — outcome, capabilities, milestones, dependencies
+            - [ ] Scale phase (6–12 months) — outcome, capabilities, milestones, dependencies`
+              });
+            }
+
+            // Gate: Build → Sell
+            if (labelAdded === 'stage:sell') {
+              const status = await findStageChecklist('Build');
+
+              if (status.total > 0 && status.unchecked > 0) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:sell'
+                });
+
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['status:needs-info']
+                });
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `⛔ **Stage transition blocked: Build → Sell**\n\nThe Build stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nAll **Must** items in the Product Intake Checklist must be complete before transitioning to Sell.`
+                });
+                return;
+              }
+
+              // Remove old stage label
+              if (currentLabels.includes('stage:build')) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:build'
+                });
+              }
+
+              // Update stakeholder label
+              for (const sl of ['stakeholder:bu', 'stakeholder:group', 'stakeholder:msft']) {
+                if (currentLabels.includes(sl)) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issue.number,
+                      name: sl
+                    });
+                  } catch (e) {}
+                }
+              }
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [stakeholderMap['stage:sell']]
+              });
+
+              if (currentLabels.includes('status:ready-for-review')) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    name: 'status:ready-for-review'
+                  });
+                } catch (e) {}
+              }
+
+              // Post Sell stage checklist
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `## ✅ Transitioned to Sell Stage
+
+            **Lead:** BUs (product sales with Group coordination) | **Group:** Strategic int'l markets and I3 accounts | **Microsoft:** Azure Marketplace activation
+
+            ---
+
+            ## Sell Stage Checklist
+
+            ### Pricing & Packaging
+            - [ ] Pricing tiers established
+            - [ ] Licensing model confirmed
+            - [ ] Discount policies set
+
+            ### Sales Enablement
+            - [ ] Product datasheets created
+            - [ ] Demo scripts prepared
+            - [ ] Case studies documented (if available)
+
+            ### Azure Marketplace (if applicable)
+            - [ ] Listing created and approved
+            - [ ] Transact capability enabled
+            - [ ] Co-sell ready status achieved
+
+            ### Partner Channel
+            - [ ] Partner agreements in place
+            - [ ] Partner enablement completed
+            - [ ] Joint marketing planned
+
+            ### Customer Acquisition
+            - [ ] Pilot customers onboarded
+            - [ ] Reference customers identified
+            - [ ] Revenue recognized`
+              });
+            }
+
+            // Gate: Sell → Review
+            if (labelAdded === 'stage:review') {
+              const status = await findStageChecklist('Sell');
+
+              if (status.total > 0 && status.unchecked > 0) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:review'
+                });
+
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['status:needs-info']
+                });
+
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  body: `⛔ **Stage transition blocked: Sell → Review**\n\nThe Sell stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Sell checklist items before transitioning to Review.`
+                });
+                return;
+              }
+
+              // Remove old stage label
+              if (currentLabels.includes('stage:sell')) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  name: 'stage:sell'
+                });
+              }
+
+              // Update stakeholder label
+              for (const sl of ['stakeholder:bu', 'stakeholder:group', 'stakeholder:msft']) {
+                if (currentLabels.includes(sl)) {
+                  try {
+                    await github.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: issue.number,
+                      name: sl
+                    });
+                  } catch (e) {}
+                }
+              }
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: [stakeholderMap['stage:review']]
+              });
+
+              if (currentLabels.includes('status:ready-for-review')) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    name: 'status:ready-for-review'
+                  });
+                } catch (e) {}
+              }
+
+              // Post Review stage checklist
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `## ✅ Transitioned to Review Stage
+
+            **Lead:** Group (define/standardize KPIs) | **BUs:** Track Success KPIs, support feedback loops | **Microsoft:** Unified Support for similar services
+
+            ---
+
+            ## Review Stage Checklist
+
+            ### KPI Tracking
+            | Category | Metrics |
+            |----------|---------|
+            | Revenue | ARR, MRR, growth rate |
+            | Customers | Count, retention, NPS |
+            | Product | Usage, adoption, feature utilization |
+            | Operations | Uptime, support tickets, resolution time |
+
+            - [ ] Metrics dashboard created
+            - [ ] Baseline measurements taken
+            - [ ] Targets established
+
+            ### Customer Feedback
+            - [ ] NPS surveys conducted
+            - [ ] Feature requests compiled
+            - [ ] Support trends analyzed
+
+            ### Performance Review
+            - [ ] Quarterly review held
+            - [ ] Results vs targets analyzed
+            - [ ] Lessons learned documented
+
+            ### Improvement Planning
+            - [ ] Enhancement priorities set
+            - [ ] Technical debt addressed
+            - [ ] Innovation opportunities identified
+
+            ### Next Iteration
+            - [ ] Version roadmap updated
+            - [ ] Resource allocation confirmed
+            - [ ] Timeline established
+
+            ---
+
+            > This is a continuous cycle. Schedule regular reviews and update this checklist each quarter.`
+              });
+            }

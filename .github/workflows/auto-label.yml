@@ -5,12 +5,12 @@ on:
     types: [opened]
 
 jobs:
-  add-bu-label:
+  add-labels:
     runs-on: ubuntu-latest
     permissions:
       issues: write
     steps:
-      - name: Add BU Label
+      - name: Add Labels
         uses: actions/github-script@v7
         with:
           script: |
@@ -38,6 +38,23 @@ jobs:
               'White-label': 'type:whitelabel'
             };
 
+            // Map verticals to labels
+            const verticalMapping = {
+              'Healthcare': 'vertical:healthcare',
+              'Government': 'vertical:government',
+              'Financial Services': 'vertical:financial-services',
+              'Cybersecurity': 'vertical:cybersecurity',
+              'Education': 'vertical:education'
+            };
+
+            // Map SaaS readiness / track to labels
+            const trackMapping = {
+              'Track A': 'track:a-saas-ready',
+              'SaaS-ready': 'track:a-saas-ready',
+              'Track B': 'track:b-modernize-first',
+              'Modernize-first': 'track:b-modernize-first'
+            };
+
             const labelsToAdd = [];
 
             // Find BU in issue body
@@ -51,6 +68,27 @@ jobs:
             // Find idea type in issue body
             for (const [type, label] of Object.entries(typeMapping)) {
               if (body.includes(type)) {
+                labelsToAdd.push(label);
+                break;
+              }
+            }
+
+            // Find vertical in issue body
+            let verticalFound = false;
+            for (const [vertical, label] of Object.entries(verticalMapping)) {
+              if (body.includes(vertical)) {
+                labelsToAdd.push(label);
+                verticalFound = true;
+                break;
+              }
+            }
+            if (!verticalFound && body.includes('Other')) {
+              labelsToAdd.push('vertical:other');
+            }
+
+            // Find track/SaaS readiness in issue body
+            for (const [track, label] of Object.entries(trackMapping)) {
+              if (body.includes(track)) {
                 labelsToAdd.push(label);
                 break;
               }

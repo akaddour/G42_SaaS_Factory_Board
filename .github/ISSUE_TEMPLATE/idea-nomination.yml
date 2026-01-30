@@ -1,5 +1,5 @@
 name: Idea Nomination
-description: Submit a new SaaS product idea for evaluation
+description: Submit a new SaaS product idea for evaluation (Template 1 - Idea Intake Form)
 title: "[IDEA] "
 labels: ["stage:ideate"]
 body:
@@ -7,12 +7,12 @@ body:
     attributes:
       value: |
         ## SaaS Product Idea Nomination
-        Thank you for submitting a new idea! Please fill out all required fields below.
+        Complete this form for every new idea. Keep responses concise and evidence-based.
 
   - type: dropdown
     id: business-unit
     attributes:
-      label: Business Unit
+      label: Affiliate / Business Unit
       description: Which BU is submitting this idea?
       options:
         - Presight
@@ -25,6 +25,21 @@ body:
         - AIQ
         - CPX
         - Space42
+    validations:
+      required: true
+
+  - type: dropdown
+    id: vertical
+    attributes:
+      label: Vertical
+      description: Which vertical does this idea target?
+      options:
+        - Healthcare
+        - Government
+        - Financial Services
+        - Cybersecurity
+        - Education
+        - Other
     validations:
       required: true
 
@@ -44,8 +59,45 @@ body:
     id: problem-statement
     attributes:
       label: Problem Statement
-      description: What problem does this idea solve?
-      placeholder: Describe the problem or opportunity this idea addresses...
+      description: What problem are we solving? For whom? Why now?
+      placeholder: Describe the problem, who has it, and why it's urgent...
+    validations:
+      required: true
+
+  - type: textarea
+    id: icp
+    attributes:
+      label: Ideal Customer Profile (ICP)
+      description: Sector, size, geography, regulatory profile, buyer personas
+      placeholder: |
+        - Sector:
+        - Company size:
+        - Geography:
+        - Regulatory profile:
+        - Buyer personas:
+    validations:
+      required: true
+
+  - type: textarea
+    id: value-hypothesis
+    attributes:
+      label: Value Hypothesis
+      description: "Quantified outcome: cost reduction, compliance, time saved, revenue, risk reduction"
+      placeholder: Describe the quantified value this solution delivers...
+    validations:
+      required: true
+
+  - type: textarea
+    id: success-metrics
+    attributes:
+      label: Success Metrics (Initial)
+      description: North-star metric + 3-5 leading indicators
+      placeholder: |
+        North-star metric:
+        Leading indicators:
+        1.
+        2.
+        3.
     validations:
       required: true
 
@@ -53,8 +105,17 @@ body:
     id: proposed-solution
     attributes:
       label: Proposed Solution
-      description: How does your idea solve this problem?
+      description: Summarize your proposed solution in 1-2 sentences
       placeholder: Describe your proposed solution...
+    validations:
+      required: true
+
+  - type: textarea
+    id: differentiation
+    attributes:
+      label: Differentiation
+      description: Why G42? Why Azure? What is the competitive advantage?
+      placeholder: Describe what differentiates this solution from alternatives...
     validations:
       required: true
 
@@ -70,6 +131,18 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: saas-readiness
+    attributes:
+      label: SaaS Readiness (Initial)
+      description: What is the current SaaS readiness of this idea?
+      options:
+        - Track A - SaaS-ready
+        - Track B - Modernize-first
+        - Unknown
+    validations:
+      required: true
+
   - type: textarea
     id: target-market
     attributes:
@@ -80,6 +153,58 @@ body:
       required: true
 
   - type: textarea
+    id: key-constraints
+    attributes:
+      label: Key Constraints
+      description: Data residency, regulated requirements, integrations, latency, sovereignty constraints, value add
+      placeholder: List any key constraints that may impact the solution...
+    validations:
+      required: false
+
+  - type: dropdown
+    id: customer-evidence
+    attributes:
+      label: Customer Evidence Available
+      description: What customer evidence exists for this idea?
+      options:
+        - Existing pipeline
+        - Existing customers
+        - None
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: support-microsoft
+    attributes:
+      label: Requested Support - Microsoft
+      description: What support is needed from Microsoft?
+      options:
+        - label: Field validation
+        - label: Marketplace guidance
+        - label: Co-sell
+        - label: ACR mapping
+
+  - type: checkboxes
+    id: support-ise
+    attributes:
+      label: Requested Support - Microsoft ISE
+      description: What support is needed from Microsoft ISE?
+      options:
+        - label: Feasibility assessment
+        - label: Accelerators
+        - label: Engineering capacity
+        - label: Other
+
+  - type: textarea
+    id: support-g42-factory
+    attributes:
+      label: Requested Support - G42 SaaS Factory
+      description: What platform services are needed?
+      placeholder: "e.g., Identity/tenant management, metering, observability, CI/CD templates..."
+    validations:
+      required: false
+
+  - type: textarea
     id: resource-estimate
     attributes:
       label: Initial Resource Estimate
@@ -87,6 +212,27 @@ body:
       placeholder: Provide rough estimates of required resources...
     validations:
       required: false
+
+  - type: input
+    id: proposed-timeline
+    attributes:
+      label: Proposed Timeline
+      description: Target MVP date / Target GA date
+      placeholder: "e.g., MVP: Q2 2026 / GA: Q4 2026"
+    validations:
+      required: false
+
+  - type: textarea
+    id: named-owners
+    attributes:
+      label: Named Owners
+      description: Key stakeholders responsible for this idea
+      placeholder: |
+        G42 Product Owner:
+        Affiliate Product Owner:
+        Engineering Lead:
+    validations:
+      required: true
 
   - type: input
     id: submitter-name
@@ -110,11 +256,11 @@ body:
     attributes:
       value: |
         ---
-        ## Ideate Stage Checklist
-        *To be completed during the Ideate phase:*
+        ## Ideate Stage - Submission Completeness Check
+        *Tick all that apply to confirm your submission is complete:*
 
-        - [ ] Clear problem statement defined
-        - [ ] Business value articulated
-        - [ ] Initial market sizing done
-        - [ ] BU sponsor identified
-        - [ ] Group template filled
+        - [ ] Problem statement is clear
+        - [ ] ICP defined
+        - [ ] Success metrics proposed
+        - [ ] Constraints captured
+        - [ ] Named owners assigned
