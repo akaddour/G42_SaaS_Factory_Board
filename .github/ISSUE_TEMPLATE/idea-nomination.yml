@@ -7,7 +7,17 @@ body:
     attributes:
       value: |
         ## SaaS Product Idea Nomination
+
         Complete this form for every new idea. Keep responses concise and evidence-based.
+
+        > Fields marked with **\*** are required.
+
+  # ── Section 1: Basics ──────────────────────────────────────────────
+
+  - type: markdown
+    attributes:
+      value: |
+        ### 1. Basics
 
   - type: dropdown
     id: business-unit
@@ -55,6 +65,14 @@ body:
     validations:
       required: true
 
+  # ── Section 2: Problem & Solution ──────────────────────────────────
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ### 2. Problem & Solution
+
   - type: textarea
     id: problem-statement
     attributes:
@@ -88,20 +106,6 @@ body:
       required: true
 
   - type: textarea
-    id: success-metrics
-    attributes:
-      label: Success Metrics (Initial)
-      description: North-star metric + 3-5 leading indicators
-      placeholder: |
-        North-star metric:
-        Leading indicators:
-        1.
-        2.
-        3.
-    validations:
-      required: true
-
-  - type: textarea
     id: proposed-solution
     attributes:
       label: Proposed Solution
@@ -119,6 +123,28 @@ body:
     validations:
       required: true
 
+  # ── Section 3: Market & Evidence ───────────────────────────────────
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ### 3. Market & Evidence
+
+  - type: textarea
+    id: success-metrics
+    attributes:
+      label: Success Metrics (Initial)
+      description: North-star metric + 3-5 leading indicators
+      placeholder: |
+        North-star metric:
+        Leading indicators:
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
   - type: dropdown
     id: business-value
     attributes:
@@ -130,6 +156,35 @@ body:
         - Low (<$1M potential)
     validations:
       required: true
+
+  - type: textarea
+    id: target-market
+    attributes:
+      label: Target Market / Customers
+      description: Who are the target customers for this product?
+      placeholder: Describe the target market and customer segments...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: customer-evidence
+    attributes:
+      label: Customer Evidence Available
+      description: What customer evidence exists for this idea?
+      options:
+        - Existing pipeline
+        - Existing customers
+        - None
+    validations:
+      required: true
+
+  # ── Section 4: Technical Readiness ─────────────────────────────────
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ### 4. Technical Readiness
 
   - type: dropdown
     id: saas-readiness
@@ -144,40 +199,27 @@ body:
       required: true
 
   - type: textarea
-    id: target-market
-    attributes:
-      label: Target Market / Customers
-      description: Who are the target customers for this product?
-      placeholder: Describe the target market and customer segments...
-    validations:
-      required: true
-
-  - type: textarea
     id: key-constraints
     attributes:
       label: Key Constraints
-      description: Data residency, regulated requirements, integrations, latency, sovereignty constraints, value add
+      description: Data residency, regulated requirements, integrations, latency, sovereignty constraints
       placeholder: List any key constraints that may impact the solution...
     validations:
       required: false
 
-  - type: dropdown
-    id: customer-evidence
+  # ── Section 5: Requested Support ───────────────────────────────────
+
+  - type: markdown
     attributes:
-      label: Customer Evidence Available
-      description: What customer evidence exists for this idea?
-      options:
-        - Existing pipeline
-        - Existing customers
-        - None
-    validations:
-      required: true
+      value: |
+        ---
+        ### 5. Requested Support
 
   - type: checkboxes
     id: support-microsoft
     attributes:
       label: Requested Support - Microsoft
-      description: What support is needed from Microsoft?
+      description: What support is needed from Microsoft? (select all that apply)
       options:
         - label: Field validation
         - label: Marketplace guidance
@@ -188,7 +230,7 @@ body:
     id: support-ise
     attributes:
       label: Requested Support - Microsoft ISE
-      description: What support is needed from Microsoft ISE?
+      description: What support is needed from Microsoft ISE? (select all that apply)
       options:
         - label: Feasibility assessment
         - label: Accelerators
@@ -203,6 +245,14 @@ body:
       placeholder: "e.g., Identity/tenant management, metering, observability, CI/CD templates..."
     validations:
       required: false
+
+  # ── Section 6: Planning & Ownership ────────────────────────────────
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ### 6. Planning & Ownership
 
   - type: textarea
     id: resource-estimate
@@ -234,6 +284,14 @@ body:
     validations:
       required: true
 
+  # ── Section 7: Submitter Info ──────────────────────────────────────
+
+  - type: markdown
+    attributes:
+      value: |
+        ---
+        ### 7. Submitter Information
+
   - type: input
     id: submitter-name
     attributes:
@@ -252,11 +310,13 @@ body:
     validations:
       required: true
 
+  # ── Ideate Stage Checklist ─────────────────────────────────────────
+
   - type: markdown
     attributes:
       value: |
         ---
-        ## Ideate Stage - Submission Completeness Check
+        ### Ideate Stage - Submission Completeness Check
         *Tick all that apply to confirm your submission is complete:*
 
         - [ ] Problem statement is clear
