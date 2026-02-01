@@ -9,8 +9,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+    outputs:
+      checklist_complete: ${{ steps.check.outputs.checklist_complete }}
     steps:
       - name: Check Checklist Completion
+        id: check
         uses: actions/github-script@v7
         with:
           script: |
@@ -85,6 +88,8 @@ jobs:
                 issue_number: issue.number,
                 body: `✅ **All ${stageName} stage checklist items completed!**\n\nThis idea is ready for review and stage transition. An admin will review shortly.`
               });
+
+              core.setOutput('checklist_complete', 'true');
             }
 
             // If boxes unchecked and has ready label, remove it
@@ -96,3 +101,15 @@ jobs:
                 name: 'status:ready-for-review'
               });
             }
+
+  notify-checklist-complete:
+    needs: check-checklist
+    if: needs.check-checklist.outputs.checklist_complete == 'true'
+    uses: ./.github/workflows/send-notifications.yml
+    with:
+      event_type: checklist-complete
+      issue_number: ${{ github.event.issue.number }}
+      notify_admins: true
+    secrets:
+      POWER_AUTOMATE_WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}
+      ADMIN_NOTIFICATION_EMAILS: ${{ secrets.ADMIN_NOTIFICATION_EMAILS }}

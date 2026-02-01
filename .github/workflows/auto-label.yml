@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+    outputs:
+      issue_number: ${{ github.event.issue.number }}
     steps:
       - name: Add Labels
         uses: actions/github-script@v7
@@ -105,3 +107,14 @@ jobs:
                 labels: labelsToAdd
               });
             }
+
+  notify-idea-submitted:
+    needs: add-labels
+    uses: ./.github/workflows/send-notifications.yml
+    with:
+      event_type: idea-submitted
+      issue_number: ${{ github.event.issue.number }}
+      notify_admins: true
+    secrets:
+      POWER_AUTOMATE_WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}
+      ADMIN_NOTIFICATION_EMAILS: ${{ secrets.ADMIN_NOTIFICATION_EMAILS }}

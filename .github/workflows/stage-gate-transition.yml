@@ -9,8 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
+    outputs:
+      notification_event: ${{ steps.gate.outputs.notification_event }}
+      notification_vars: ${{ steps.gate.outputs.notification_vars }}
     steps:
       - name: Handle Stage Transition
+        id: gate
         uses: actions/github-script@v7
         with:
           script: |
@@ -19,8 +23,33 @@ jobs:
             const body = issue.body || '';
             const currentLabels = issue.labels.map(l => l.name);
 
-            // Only process stage labels
-            if (!labelAdded.startsWith('stage:')) return;
+            // Only process stage and decision labels
+            const isStageLabel = labelAdded.startsWith('stage:');
+            const isDecisionLabel = labelAdded.startsWith('decision:');
+            const isRedFlag = labelAdded === 'status:red-flag';
+
+            // Handle decision label notifications
+            if (isDecisionLabel) {
+              const decisionNames = {
+                'decision:go-fast-track': 'GO Fast-track',
+                'decision:go-modernize': 'GO Modernize-first',
+                'decision:hold': 'HOLD',
+                'decision:kill': 'KILL'
+              };
+              const decision = decisionNames[labelAdded] || labelAdded;
+              core.setOutput('notification_event', 'decision-made');
+              core.setOutput('notification_vars', JSON.stringify({ decision }));
+              return;
+            }
+
+            // Handle red-flag notification
+            if (isRedFlag) {
+              core.setOutput('notification_event', 'red-flag-raised');
+              core.setOutput('notification_vars', '{}');
+              return;
+            }
+
+            if (!isStageLabel) return;
 
             // Define stage order and previous stage mapping
             const stageOrder = ['stage:ideate', 'stage:validate', 'stage:build', 'stage:sell', 'stage:review'];
@@ -104,6 +133,13 @@ jobs:
                   issue_number: issue.number,
                   body: `⛔ **Stage transition blocked: Ideate → Validate**\n\nThe Ideate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Ideate checklist items before transitioning to Validate.`
                 });
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Ideate',
+                  current_stage: 'Validate',
+                  blocked_reason: `Ideate checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                }));
                 return;
               }
 
@@ -214,6 +250,12 @@ jobs:
             **Decision notes / conditions / dependencies:**
             _[To be filled by reviewer]_`
               });
+
+              core.setOutput('notification_event', 'stage-transition-success');
+              core.setOutput('notification_vars', JSON.stringify({
+                previous_stage: 'Ideate',
+                current_stage: 'Validate'
+              }));
             }
 
             // Gate: Validate → Build
@@ -236,6 +278,13 @@ jobs:
                   issue_number: issue.number,
                   body: `⛔ **Stage transition blocked: Validate → Build**\n\nA GO decision label is required before moving to Build.\n\nPlease apply one of:\n- \`decision:go-fast-track\`\n- \`decision:go-modernize\`\n\nIf the idea is not approved, apply \`decision:hold\` or \`decision:kill\` instead.`
                 });
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Validate',
+                  current_stage: 'Build',
+                  blocked_reason: 'A GO decision label is required before moving to Build'
+                }));
                 return;
               }
 
@@ -253,6 +302,13 @@ jobs:
                   issue_number: issue.number,
                   body: `⛔ **Stage transition blocked: Validate → Build**\n\nA \`status:red-flag\` override is active. Red-flag issues must be resolved before proceeding to Build.\n\n**Red-flag overrides (auto HOLD until resolved):**\n- No viable tenancy or data isolation approach for target segment\n- No design partner or pilot path (no credible customer access)\n- No accountable product owner (unowned initiative)\n- Unit economics structurally negative with no mitigation path\n\nRemove the \`status:red-flag\` label once all issues are resolved.`
                 });
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Validate',
+                  current_stage: 'Build',
+                  blocked_reason: 'Red-flag override is active — must be resolved before proceeding to Build'
+                }));
                 return;
               }
 
@@ -279,6 +335,13 @@ jobs:
                   issue_number: issue.number,
                   body: `⛔ **Stage transition blocked: Validate → Build**\n\nThe Validate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Validate checklist items before transitioning to Build.`
                 });
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Validate',
+                  current_stage: 'Build',
+                  blocked_reason: `Validate checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                }));
                 return;
               }
 
@@ -398,6 +461,12 @@ jobs:
             - [ ] GA phase (90–180 days) — outcome, capabilities, milestones, dependencies
             - [ ] Scale phase (6–12 months) — outcome, capabilities, milestones, dependencies`
               });
+
+              core.setOutput('notification_event', 'stage-transition-success');
+              core.setOutput('notification_vars', JSON.stringify({
+                previous_stage: 'Validate',
+                current_stage: 'Build'
+              }));
             }
 
             // Gate: Build → Sell
@@ -425,6 +494,13 @@ jobs:
                   issue_number: issue.number,
                   body: `⛔ **Stage transition blocked: Build → Sell**\n\nThe Build stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nAll **Must** items in the Product Intake Checklist must be complete before transitioning to Sell.`
                 });
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Build',
+                  current_stage: 'Sell',
+                  blocked_reason: `Build checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                }));
                 return;
               }
 
@@ -507,6 +583,12 @@ jobs:
             - [ ] Reference customers identified
             - [ ] Revenue recognized`
               });
+
+              core.setOutput('notification_event', 'stage-transition-success');
+              core.setOutput('notification_vars', JSON.stringify({
+                previous_stage: 'Build',
+                current_stage: 'Sell'
+              }));
             }
 
             // Gate: Sell → Review
@@ -534,6 +616,13 @@ jobs:
                   issue_number: issue.number,
                   body: `⛔ **Stage transition blocked: Sell → Review**\n\nThe Sell stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Sell checklist items before transitioning to Review.`
                 });
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Sell',
+                  current_stage: 'Review',
+                  blocked_reason: `Sell checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                }));
                 return;
               }
 
@@ -627,4 +716,23 @@ jobs:
 
             > This is a continuous cycle. Schedule regular reviews and update this checklist each quarter.`
               });
+
+              core.setOutput('notification_event', 'stage-transition-success');
+              core.setOutput('notification_vars', JSON.stringify({
+                previous_stage: 'Sell',
+                current_stage: 'Review'
+              }));
             }
+
+  send-notification:
+    needs: stage-gate
+    if: needs.stage-gate.outputs.notification_event != ''
+    uses: ./.github/workflows/send-notifications.yml
+    with:
+      event_type: ${{ needs.stage-gate.outputs.notification_event }}
+      issue_number: ${{ github.event.issue.number }}
+      extra_vars: ${{ needs.stage-gate.outputs.notification_vars }}
+      notify_admins: ${{ contains(fromJSON('["decision-made", "red-flag-raised", "stage-transition-blocked"]'), needs.stage-gate.outputs.notification_event) }}
+    secrets:
+      POWER_AUTOMATE_WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}
+      ADMIN_NOTIFICATION_EMAILS: ${{ secrets.ADMIN_NOTIFICATION_EMAILS }}

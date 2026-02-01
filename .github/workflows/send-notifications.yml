@@ -1,0 +1,181 @@
+name: Send Email Notifications
+
+on:
+  workflow_call:
+    inputs:
+      event_type:
+        description: 'Type of notification event'
+        required: true
+        type: string
+      issue_number:
+        description: 'GitHub issue number'
+        required: true
+        type: number
+      extra_vars:
+        description: 'JSON string of additional template variables'
+        required: false
+        type: string
+        default: '{}'
+      notify_admins:
+        description: 'Whether to CC admin group'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      POWER_AUTOMATE_WEBHOOK_URL:
+        required: true
+      ADMIN_NOTIFICATION_EMAILS:
+        required: false
+
+jobs:
+  send-notification:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: read
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch issue and send notification
+        uses: actions/github-script@v7
+        env:
+          WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}
+          ADMIN_EMAILS: ${{ secrets.ADMIN_NOTIFICATION_EMAILS }}
+          EVENT_TYPE: ${{ inputs.event_type }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          EXTRA_VARS: ${{ inputs.extra_vars }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // --- 1. Fetch issue details ---
+            const issue = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt(process.env.ISSUE_NUMBER)
+            });
+
+            const body = issue.data.body || '';
+            const title = issue.data.title.replace(/^\[IDEA\]\s*/i, '').trim();
+            const issueUrl = issue.data.html_url;
+            const labels = issue.data.labels.map(l => l.name);
+
+            // --- 2. Extract fields from issue body ---
+            function extractSection(body, header) {
+              const regex = new RegExp(`### ${header}\\s*\\n([\\s\\S]*?)(?=\\n###|$)`, 'i');
+              const match = body.match(regex);
+              return match ? match[1].trim() : '';
+            }
+
+            function extractEmails(text) {
+              const emailRegex = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+              return text.match(emailRegex) || [];
+            }
+
+            const submitterEmail = extractSection(body, 'Submitter Email');
+            const submitterName = extractSection(body, 'Submitter Name');
+            const namedOwners = extractSection(body, 'Named Owners');
+            const businessUnit = extractSection(body, 'Affiliate / Business Unit');
+            const vertical = extractSection(body, 'Vertical');
+
+            // Determine current stage from labels
+            const stageLabel = labels.find(l => l.startsWith('stage:'));
+            const stageNames = {
+              'stage:ideate': 'Ideate',
+              'stage:validate': 'Validate',
+              'stage:build': 'Build',
+              'stage:sell': 'Sell',
+              'stage:review': 'Review'
+            };
+            const currentStage = stageLabel ? (stageNames[stageLabel] || stageLabel) : 'Unknown';
+
+            // Collect recipient emails
+            const toEmails = new Set();
+            const submitterEmails = extractEmails(submitterEmail);
+            submitterEmails.forEach(e => toEmails.add(e));
+            const ownerEmails = extractEmails(namedOwners);
+            ownerEmails.forEach(e => toEmails.add(e));
+
+            // CC admins if requested
+            const ccEmails = [];
+            if (process.env.ADMIN_EMAILS) {
+              const adminList = process.env.ADMIN_EMAILS.split(',').map(e => e.trim()).filter(Boolean);
+              ccEmails.push(...adminList);
+            }
+
+            // If no recipients found, skip
+            if (toEmails.size === 0 && ccEmails.length === 0) {
+              console.log('No recipient emails found. Skipping notification.');
+              return;
+            }
+
+            // --- 3. Load email template ---
+            const templatePath = path.join('templates', 'emails', `${process.env.EVENT_TYPE}.json`);
+            if (!fs.existsSync(templatePath)) {
+              console.log(`Template not found: ${templatePath}. Skipping notification.`);
+              return;
+            }
+
+            const template = JSON.parse(fs.readFileSync(templatePath, 'utf8'));
+
+            // --- 4. Build template variables ---
+            const extraVars = JSON.parse(process.env.EXTRA_VARS || '{}');
+
+            const vars = {
+              idea_name: title,
+              issue_url: issueUrl,
+              issue_number: process.env.ISSUE_NUMBER,
+              business_unit: businessUnit || 'N/A',
+              vertical: vertical || 'N/A',
+              submitter_name: submitterName || 'Unknown',
+              submitter_email: submitterEmails[0] || 'Unknown',
+              current_stage: currentStage,
+              named_owners: namedOwners || 'N/A',
+              ...extraVars
+            };
+
+            // --- 5. Replace template variables ---
+            let subject = template.subject;
+            let bodyHtml = template.body;
+
+            for (const [key, value] of Object.entries(vars)) {
+              const placeholder = `{{${key}}}`;
+              subject = subject.split(placeholder).join(value);
+              bodyHtml = bodyHtml.split(placeholder).join(value);
+            }
+
+            // --- 6. Send to Power Automate webhook ---
+            const webhookUrl = process.env.WEBHOOK_URL;
+            if (!webhookUrl) {
+              console.log('POWER_AUTOMATE_WEBHOOK_URL secret not set. Skipping notification.');
+              return;
+            }
+
+            const payload = {
+              to: Array.from(toEmails),
+              cc: ccEmails,
+              subject: subject,
+              body: bodyHtml,
+              event_type: process.env.EVENT_TYPE,
+              issue_number: parseInt(process.env.ISSUE_NUMBER),
+              issue_url: issueUrl
+            };
+
+            console.log(`Sending ${process.env.EVENT_TYPE} notification to: ${payload.to.join(', ')}`);
+            if (payload.cc.length > 0) {
+              console.log(`CC: ${payload.cc.join(', ')}`);
+            }
+
+            const response = await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+              console.log('Notification sent successfully.');
+            } else {
+              console.log(`Webhook returned status ${response.status}: ${await response.text()}`);
+            }
