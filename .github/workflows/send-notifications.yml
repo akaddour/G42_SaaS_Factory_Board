@@ -74,8 +74,15 @@ jobs:
               return text.match(emailRegex) || [];
             }
 
-            const submitterEmail = extractSection(body, 'Submitter Email');
-            const submitterName = extractSection(body, 'Submitter Name');
+            // Extract from "**Submitted by:** Name (email)" format
+            let submitterName = '';
+            let submitterEmail = '';
+            const submittedByMatch = body.match(/\*\*Submitted by:\*\*\s*(.+?)\s*\(([^)]+)\)/i);
+            if (submittedByMatch) {
+              submitterName = submittedByMatch[1].trim();
+              submitterEmail = submittedByMatch[2].trim();
+            }
+
             const namedOwners = extractSection(body, 'Named Owners');
             const businessUnit = extractSection(body, 'Affiliate / Business Unit');
             const vertical = extractSection(body, 'Vertical');
@@ -93,8 +100,9 @@ jobs:
 
             // Collect recipient emails
             const toEmails = new Set();
-            const submitterEmails = extractEmails(submitterEmail);
-            submitterEmails.forEach(e => toEmails.add(e));
+            if (submitterEmail) {
+              toEmails.add(submitterEmail);
+            }
             const ownerEmails = extractEmails(namedOwners);
             ownerEmails.forEach(e => toEmails.add(e));
 
@@ -130,7 +138,7 @@ jobs:
               business_unit: businessUnit || 'N/A',
               vertical: vertical || 'N/A',
               submitter_name: submitterName || 'Unknown',
-              submitter_email: submitterEmails[0] || 'Unknown',
+              submitter_email: submitterEmail || 'Unknown',
               current_stage: currentStage,
               named_owners: namedOwners || 'N/A',
               ...extraVars
