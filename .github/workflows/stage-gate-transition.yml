@@ -78,10 +78,20 @@ jobs:
               'stage:review': 'stakeholder:group'
             };
 
-            // Helper: count checked/unchecked checkboxes in text
-            function checklistStatus(text) {
-              const checked = (text.match(/- \[x\]/gi) || []).length;
-              const unchecked = (text.match(/- \[ \]/g) || []).length;
+            // Helper: extract text for a specific section (between its ## header and the next ## header)
+            function getSection(text, sectionHeader) {
+              const startIdx = text.indexOf(sectionHeader);
+              if (startIdx === -1) return '';
+              const afterHeader = text.substring(startIdx + sectionHeader.length);
+              const nextSection = afterHeader.search(/\n## /);
+              return nextSection === -1 ? afterHeader : afterHeader.substring(0, nextSection);
+            }
+
+            // Helper: count checked/unchecked checkboxes in a specific section
+            function checklistStatus(text, sectionHeader) {
+              const section = sectionHeader ? getSection(text, sectionHeader) : text;
+              const checked = (section.match(/- \[x\]/gi) || []).length;
+              const unchecked = (section.match(/- \[ \]/g) || []).length;
               return { checked, unchecked, total: checked + unchecked };
             }
 
@@ -369,7 +379,7 @@ jobs:
 
             // Gate: Ideate → Validate
             if (labelAdded === 'stage:validate') {
-              const status = checklistStatus(body);
+              const status = checklistStatus(body, '## Ideate Stage');
 
               if (status.total > 0 && status.unchecked > 0) {
                 await blockTransition('Ideate', 'Validate', 'stage:validate',
@@ -425,9 +435,8 @@ jobs:
                 return;
               }
 
-              const status = checklistStatus(body);
-              // Only check if there are Validate checklist items
-              if (body.includes('Validate Stage Checklist') && status.total > 0 && status.unchecked > 0) {
+              const status = checklistStatus(body, '## Validate Stage Checklist');
+              if (status.total > 0 && status.unchecked > 0) {
                 await blockTransition('Validate', 'Build', 'stage:build',
                   `The Validate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Validate checklist items before transitioning to Build.`);
 
@@ -452,9 +461,9 @@ jobs:
 
             // Gate: Build → Sell
             if (labelAdded === 'stage:sell') {
-              const status = checklistStatus(body);
+              const status = checklistStatus(body, '## Build Stage');
 
-              if (body.includes('Build Stage') && status.total > 0 && status.unchecked > 0) {
+              if (status.total > 0 && status.unchecked > 0) {
                 await blockTransition('Build', 'Sell', 'stage:sell',
                   `The Build stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nAll **Must** items in the Product Intake Checklist must be complete before transitioning to Sell.`);
 
@@ -479,9 +488,9 @@ jobs:
 
             // Gate: Sell → Review
             if (labelAdded === 'stage:review') {
-              const status = checklistStatus(body);
+              const status = checklistStatus(body, '## Sell Stage Checklist');
 
-              if (body.includes('Sell Stage Checklist') && status.total > 0 && status.unchecked > 0) {
+              if (status.total > 0 && status.unchecked > 0) {
                 await blockTransition('Sell', 'Review', 'stage:review',
                   `The Sell stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Sell checklist items before transitioning to Review.`);
 

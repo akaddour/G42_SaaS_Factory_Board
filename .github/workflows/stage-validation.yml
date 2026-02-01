@@ -27,9 +27,29 @@ jobs:
             const currentStage = currentLabels.find(l => l.startsWith('stage:'));
             if (!currentStage) return;
 
-            // Count checkboxes in issue body (checklists are appended to the body)
-            const checked = (body.match(/- \[x\]/gi) || []).length;
-            const unchecked = (body.match(/- \[ \]/g) || []).length;
+            // Map stage labels to their section headers in the issue body
+            const stageSectionHeaders = {
+              'stage:ideate':   '## Ideate Stage',
+              'stage:validate': '## Validate Stage Checklist',
+              'stage:build':    '## Build Stage',
+              'stage:sell':     '## Sell Stage Checklist',
+              'stage:review':   '## Review Stage Checklist'
+            };
+
+            // Extract only the current stage's section
+            const header = stageSectionHeaders[currentStage];
+            let sectionText = body;
+            if (header) {
+              const startIdx = body.indexOf(header);
+              if (startIdx === -1) return; // Section not found
+              const afterHeader = body.substring(startIdx + header.length);
+              const nextSection = afterHeader.search(/\n## /);
+              sectionText = nextSection === -1 ? afterHeader : afterHeader.substring(0, nextSection);
+            }
+
+            // Count checkboxes in the current stage section only
+            const checked = (sectionText.match(/- \[x\]/gi) || []).length;
+            const unchecked = (sectionText.match(/- \[ \]/g) || []).length;
             const totalBoxes = checked + unchecked;
             const hasReadyLabel = currentLabels.includes('status:ready-for-review');
 
