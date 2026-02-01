@@ -4,11 +4,13 @@ on:
   issues:
     types: [labeled]
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   stage-gate:
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
     outputs:
       notification_event: ${{ steps.gate.outputs.notification_event }}
       notification_vars: ${{ steps.gate.outputs.notification_vars }}

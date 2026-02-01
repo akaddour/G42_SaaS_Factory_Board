@@ -4,11 +4,13 @@ on:
   issues:
     types: [opened]
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   add-labels:
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
     outputs:
       issue_number: ${{ github.event.issue.number }}
     steps:

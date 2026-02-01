@@ -4,11 +4,13 @@ on:
   issues:
     types: [edited]
 
+permissions:
+  issues: write
+  contents: read
+
 jobs:
   check-checklist:
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
     outputs:
       checklist_complete: ${{ steps.check.outputs.checklist_complete }}
     steps:
