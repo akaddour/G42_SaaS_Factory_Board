@@ -89,11 +89,22 @@ jobs:
             }
 
             // Helper: count checked/unchecked checkboxes in a specific section
+            // Also extracts the labels of unchecked items
             function checklistStatus(text, sectionHeader) {
               const section = sectionHeader ? getSection(text, sectionHeader) : text;
               const checked = (section.match(/- \[x\]/gi) || []).length;
               const unchecked = (section.match(/- \[ \]/g) || []).length;
-              return { checked, unchecked, total: checked + unchecked };
+              // Extract unchecked item labels
+              const uncheckedItems = [];
+              const lines = section.split('\n');
+              for (const line of lines) {
+                if (/- \[ \]/.test(line)) {
+                  // Strip markdown formatting to get clean label
+                  let label = line.replace(/- \[ \]\s*/, '').replace(/\*\*/g, '').trim();
+                  if (label) uncheckedItems.push(label);
+                }
+              }
+              return { checked, unchecked, total: checked + unchecked, uncheckedItems };
             }
 
             // Helper: update issue body (append checklist)
@@ -383,14 +394,16 @@ jobs:
               const status = checklistStatus(body, '## Ideate Stage');
 
               if (status.total > 0 && status.unchecked > 0) {
+                const itemList = status.uncheckedItems.map(i => `- ${i}`).join('\n');
                 await blockTransition('Ideate', 'Validate', 'stage:validate',
-                  `The Ideate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Ideate checklist items before transitioning to Validate.`);
+                  `The Ideate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked:\n\n${itemList}`);
 
+                const reasonHtml = status.uncheckedItems.map(i => `<li>${i}</li>`).join('');
                 core.setOutput('notification_event', 'stage-transition-blocked');
                 core.setOutput('notification_vars', JSON.stringify({
                   previous_stage: 'Ideate',
                   current_stage: 'Validate',
-                  blocked_reason: `Ideate checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                  blocked_reason: `The following items are still incomplete:<ul>${reasonHtml}</ul>`
                 }));
                 return;
               }
@@ -418,7 +431,7 @@ jobs:
                 core.setOutput('notification_vars', JSON.stringify({
                   previous_stage: 'Validate',
                   current_stage: 'Build',
-                  blocked_reason: 'A GO decision label is required before moving to Build'
+                  blocked_reason: 'A GO decision from the review board is required before the idea can proceed to the Build stage. The SaaS Factory team will review your submission and provide a decision.'
                 }));
                 return;
               }
@@ -431,21 +444,23 @@ jobs:
                 core.setOutput('notification_vars', JSON.stringify({
                   previous_stage: 'Validate',
                   current_stage: 'Build',
-                  blocked_reason: 'Red-flag override is active — must be resolved before proceeding to Build'
+                  blocked_reason: 'One or more critical risk flags have been raised that must be resolved before proceeding:<ul><li>Viable tenancy / data isolation approach</li><li>Design partner or pilot path</li><li>Accountable product owner</li><li>Sustainable unit economics</li></ul>The SaaS Factory team will work with you to address these items.'
                 }));
                 return;
               }
 
               const status = checklistStatus(body, '## Validate Stage Checklist');
               if (status.total > 0 && status.unchecked > 0) {
+                const itemList = status.uncheckedItems.map(i => `- ${i}`).join('\n');
                 await blockTransition('Validate', 'Build', 'stage:build',
-                  `The Validate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Validate checklist items before transitioning to Build.`);
+                  `The Validate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked:\n\n${itemList}`);
 
+                const reasonHtml = status.uncheckedItems.map(i => `<li>${i}</li>`).join('');
                 core.setOutput('notification_event', 'stage-transition-blocked');
                 core.setOutput('notification_vars', JSON.stringify({
                   previous_stage: 'Validate',
                   current_stage: 'Build',
-                  blocked_reason: `Validate checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                  blocked_reason: `The following items are still incomplete:<ul>${reasonHtml}</ul>`
                 }));
                 return;
               }
@@ -477,14 +492,16 @@ jobs:
               const status = checklistStatus(body, '## Build Stage');
 
               if (status.total > 0 && status.unchecked > 0) {
+                const itemList = status.uncheckedItems.map(i => `- ${i}`).join('\n');
                 await blockTransition('Build', 'Sell', 'stage:sell',
-                  `The Build stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nAll **Must** items in the Product Intake Checklist must be complete before transitioning to Sell.`);
+                  `The Build stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked:\n\n${itemList}`);
 
+                const reasonHtml = status.uncheckedItems.map(i => `<li>${i}</li>`).join('');
                 core.setOutput('notification_event', 'stage-transition-blocked');
                 core.setOutput('notification_vars', JSON.stringify({
                   previous_stage: 'Build',
                   current_stage: 'Sell',
-                  blocked_reason: `Build checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                  blocked_reason: `The following items are still incomplete:<ul>${reasonHtml}</ul>`
                 }));
                 return;
               }
@@ -504,14 +521,16 @@ jobs:
               const status = checklistStatus(body, '## Sell Stage Checklist');
 
               if (status.total > 0 && status.unchecked > 0) {
+                const itemList = status.uncheckedItems.map(i => `- ${i}`).join('\n');
                 await blockTransition('Sell', 'Review', 'stage:review',
-                  `The Sell stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Sell checklist items before transitioning to Review.`);
+                  `The Sell stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked:\n\n${itemList}`);
 
+                const reasonHtml = status.uncheckedItems.map(i => `<li>${i}</li>`).join('');
                 core.setOutput('notification_event', 'stage-transition-blocked');
                 core.setOutput('notification_vars', JSON.stringify({
                   previous_stage: 'Sell',
                   current_stage: 'Review',
-                  blocked_reason: `Sell checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                  blocked_reason: `The following items are still incomplete:<ul>${reasonHtml}</ul>`
                 }));
                 return;
               }
