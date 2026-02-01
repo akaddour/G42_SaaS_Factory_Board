@@ -71,9 +71,16 @@ jobs:
 
             // --- 2. Extract fields from issue body ---
             function extractSection(body, header) {
-              const regex = new RegExp(`### ${header}\\s*\\n([\\s\\S]*?)(?=\\n###|$)`, 'i');
-              const match = body.match(regex);
-              return match ? match[1].trim() : '';
+              // Try formatted style: **Header**\n> Answer
+              const boldRegex = new RegExp(`\\*\\*${header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*\\*\\s*\\n(>[^\\n]*(?:\\n>[^\\n]*)*)`, 'i');
+              const boldMatch = body.match(boldRegex);
+              if (boldMatch) {
+                return boldMatch[1].replace(/^>\s*/gm, '').trim();
+              }
+              // Fallback: ### Header style
+              const h3Regex = new RegExp(`### ${header}\\s*\\n([\\s\\S]*?)(?=\\n###|$)`, 'i');
+              const h3Match = body.match(h3Regex);
+              return h3Match ? h3Match[1].trim() : '';
             }
 
             function extractEmails(text) {
