@@ -51,6 +51,9 @@ gh label create "bu:aiq" --description "AIQ" --color "006B75" --repo $REPO 2>/de
 gh label create "bu:cpx" --description "CPX" --color "006B75" --repo $REPO 2>/dev/null || gh label edit "bu:cpx" --description "CPX" --color "006B75" --repo $REPO
 gh label create "bu:space42" --description "Space42" --color "006B75" --repo $REPO 2>/dev/null || gh label edit "bu:space42" --description "Space42" --color "006B75" --repo $REPO
 
+# Engineering Labels
+gh label create "engineering:ise" --description "ISE co-engineering" --color "D4C5F9" --repo $REPO 2>/dev/null || gh label edit "engineering:ise" --description "ISE co-engineering" --color "D4C5F9" --repo $REPO
+
 # Status Labels
 gh label create "status:needs-info" --description "Waiting for more information" --color "FEF2C0" --repo $REPO 2>/dev/null || gh label edit "status:needs-info" --description "Waiting for more information" --color "FEF2C0" --repo $REPO
 gh label create "status:blocked" --description "Blocked by external dependency" --color "E99695" --repo $REPO 2>/dev/null || gh label edit "status:blocked" --description "Blocked by external dependency" --color "E99695" --repo $REPO

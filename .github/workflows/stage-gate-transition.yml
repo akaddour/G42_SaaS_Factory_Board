@@ -78,12 +78,13 @@ jobs:
               'stage:review': 'stakeholder:group'
             };
 
-            // Helper: extract text for a specific section (between its ## header and the next ## header)
+            // Helper: extract text for a specific section (between its header and the next section)
             function getSection(text, sectionHeader) {
               const startIdx = text.indexOf(sectionHeader);
               if (startIdx === -1) return '';
               const afterHeader = text.substring(startIdx + sectionHeader.length);
-              const nextSection = afterHeader.search(/\n## /);
+              // Stop at next ## heading, next **bold field**, or next --- divider
+              const nextSection = afterHeader.search(/\n(?:## |\*\*[A-Z]|---)/);
               return nextSection === -1 ? afterHeader : afterHeader.substring(0, nextSection);
             }
 
@@ -451,6 +452,18 @@ jobs:
 
               await swapLabels('stage:validate', 'stage:build');
               await appendToBody(buildChecklist);
+
+              // Add engineering:ise label if ISE support was requested
+              const iseSection = getSection(body, '**Requested Support - Microsoft ISE**');
+              const hasIseSupport = iseSection && iseSection.match(/- .+/);
+              if (hasIseSupport && !currentLabels.includes('engineering:ise')) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['engineering:ise']
+                });
+              }
 
               core.setOutput('notification_event', 'stage-transition-success');
               core.setOutput('notification_vars', JSON.stringify({
