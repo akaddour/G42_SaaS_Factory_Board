@@ -506,16 +506,27 @@ jobs:
 
   sync-board:
     needs: stage-gate
-    if: needs.stage-gate.outputs.notification_event == 'stage-transition-success'
+    if: >-
+      needs.stage-gate.outputs.notification_event == 'stage-transition-success' ||
+      needs.stage-gate.outputs.notification_event == 'stage-transition-blocked'
     runs-on: ubuntu-latest
     steps:
-      - name: Sync Stage Label to Project Board
+      - name: Sync Board Column
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.PROJECT_PAT || secrets.GITHUB_TOKEN }}
           script: |
             const PROJECT_ID = 'PVT_kwHOALNmH84BNitD';
             const STAGE_FIELD_ID = 'PVTSSF_lAHOALNmH84BNitDzg8gaUE';
+
+            const stageToOption = {
+              'Ideate':    'a2cbc606',
+              'Validate':  '191386a7',
+              'Build':     'a6a853b2',
+              'Sell':      '4eddb5b2',
+              'Review':    'c420d033',
+              'Backlog':   'c14ac672'
+            };
 
             const labelToOption = {
               'stage:ideate':    'a2cbc606',
@@ -525,9 +536,20 @@ jobs:
               'stage:review':    'c420d033'
             };
 
-            const newStageLabel = context.payload.label.name;
-            const optionId = labelToOption[newStageLabel];
-            if (!optionId) return;
+            const event = '${{ needs.stage-gate.outputs.notification_event }}';
+            const vars = JSON.parse('${{ needs.stage-gate.outputs.notification_vars }}');
+
+            // Determine which column to move to
+            let targetOptionId;
+            if (event === 'stage-transition-success') {
+              // Move forward to the new stage
+              targetOptionId = stageToOption[vars.current_stage];
+            } else {
+              // Blocked — move back to the previous stage
+              targetOptionId = stageToOption[vars.previous_stage] || stageToOption['Backlog'];
+            }
+
+            if (!targetOptionId) return;
 
             // Find the project item ID for this issue
             const query = `query($projectId: ID!) {
@@ -572,10 +594,11 @@ jobs:
               projectId: PROJECT_ID,
               itemId: item.id,
               fieldId: STAGE_FIELD_ID,
-              optionId: optionId
+              optionId: targetOptionId
             });
 
-            console.log(`Synced board to ${newStageLabel} for issue #${context.payload.issue.number}`);
+            const action = event === 'stage-transition-success' ? 'advanced' : 'moved back';
+            console.log(`Issue #${context.payload.issue.number}: ${action} to ${vars.current_stage || vars.previous_stage} on board.`);
 
   notify-submitter:
     needs: stage-gate

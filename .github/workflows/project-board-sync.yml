@@ -46,12 +46,42 @@ jobs:
               'stage:sell', 'stage:review'
             ];
 
+            // Reverse map: label → option ID (for moving cards back)
+            const labelToOption = {
+              'stage:ideate':    'a2cbc606',
+              'stage:validate':  '191386a7',
+              'stage:build':     'a6a853b2',
+              'stage:sell':      '4eddb5b2',
+              'stage:review':    'c420d033'
+            };
+
+            // Helper: move a card to a specific column
+            async function moveCard(itemId, optionId) {
+              const mutation = `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId
+                  itemId: $itemId
+                  fieldId: $fieldId
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
+                }
+              }`;
+              await github.graphql(mutation, {
+                projectId: PROJECT_ID,
+                itemId: itemId,
+                fieldId: STAGE_FIELD_ID,
+                optionId: optionId
+              });
+            }
+
             // Query all items in the project with their stage field value
             const query = `query {
               node(id: "${PROJECT_ID}") {
                 ... on ProjectV2 {
                   items(first: 100) {
                     nodes {
+                      id
                       content {
                         ... on Issue {
                           number
@@ -94,6 +124,20 @@ jobs:
 
               // Get the current stage label on the issue
               const currentStageLabel = currentLabels.find(l => l.startsWith('stage:'));
+
+              // If the issue has status:needs-info, the gate blocked a transition.
+              // Move the card BACK to match the issue's actual stage label.
+              if (currentLabels.includes('status:needs-info') && expectedLabel && expectedLabel !== currentStageLabel) {
+                if (currentStageLabel && labelToOption[currentStageLabel]) {
+                  console.log(`Issue #${issueNumber}: transition was blocked. Moving card back to ${currentStageLabel}.`);
+                  await moveCard(item.id, labelToOption[currentStageLabel]);
+                } else {
+                  // No stage label at all — move back to Backlog
+                  console.log(`Issue #${issueNumber}: transition was blocked, no stage label. Moving card to Backlog.`);
+                  await moveCard(item.id, 'c14ac672');
+                }
+                continue;
+              }
 
               // If board says a stage that differs from the issue label, sync it
               if (expectedLabel && expectedLabel !== currentStageLabel) {
