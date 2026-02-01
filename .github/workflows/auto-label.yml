@@ -14,6 +14,41 @@ jobs:
     outputs:
       issue_number: ${{ github.event.issue.number }}
     steps:
+      - name: Format Issue Body
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            let body = issue.body || '';
+
+            // Only format issues created from the Idea Nomination template
+            if (!body.includes('## SaaS Product Idea Nomination')) return;
+
+            // Define section breaks: insert before these field headings
+            const sections = [
+              { before: '### Affiliate / Business Unit', header: '## 1. Basics' },
+              { before: '### Problem Statement', header: '## 2. Problem & Solution' },
+              { before: '### Success Metrics (Initial)', header: '## 3. Market & Evidence' },
+              { before: '### SaaS Readiness (Initial)', header: '## 4. Technical Readiness' },
+              { before: '### Requested Support - Microsoft', header: '## 5. Requested Support' },
+              { before: '### Initial Resource Estimate', header: '## 6. Planning & Ownership' },
+            ];
+
+            // Insert section headers
+            for (const section of sections) {
+              if (body.includes(section.before)) {
+                body = body.replace(section.before, `---\n\n${section.header}\n\n${section.before}`);
+              }
+            }
+
+            // Update the issue body
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: body
+            });
+
       - name: Add Labels
         uses: actions/github-script@v7
         with:
