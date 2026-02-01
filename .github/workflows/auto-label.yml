@@ -24,17 +24,80 @@ jobs:
             // Only format issues created from the Idea Nomination template
             if (!body.includes('## SaaS Product Idea Nomination')) return;
 
-            // Define section breaks: insert before these field headings
+            // --- 1. Convert JSON arrays to bullet lists ---
+            // Matches: ["item1","item2"] on its own line
+            body = body.replace(/^\[("[^"]*"(?:,\s*"[^"]*")*)\]$/gm, (match, inner) => {
+              try {
+                const items = JSON.parse(`[${inner}]`);
+                return items.map(item => `- ${item}`).join('\n');
+              } catch (e) {
+                return match;
+              }
+            });
+
+            // --- 2. Convert ### headings to bold Q&A format ---
+            // Transforms:
+            //   ### Field Label
+            //   Answer text
+            // Into:
+            //   **Field Label**
+            //   > Answer text
+            const lines = body.split('\n');
+            const formatted = [];
+            let i = 0;
+
+            while (i < lines.length) {
+              const line = lines[i];
+
+              // Match ### field headings (but not ## section headers or checklist headers)
+              if (line.startsWith('### ') && !line.includes('Ideate Stage') && !line.includes('SaaS Product Idea Nomination')) {
+                const label = line.replace('### ', '');
+                formatted.push(`**${label}**`);
+
+                // Collect the answer lines until next heading or end
+                i++;
+                const answerLines = [];
+                while (i < lines.length && !lines[i].startsWith('### ') && !lines[i].startsWith('## ') && !lines[i].startsWith('---')) {
+                  if (lines[i].trim() !== '') {
+                    answerLines.push(lines[i]);
+                  }
+                  i++;
+                }
+
+                if (answerLines.length > 0) {
+                  // If answer has bullet points, keep them as-is
+                  const hasBullets = answerLines.some(l => l.trim().startsWith('- '));
+                  if (hasBullets) {
+                    formatted.push(answerLines.join('\n'));
+                  } else {
+                    // Single or multi-line answer: use blockquote
+                    formatted.push(answerLines.map(l => `> ${l}`).join('\n'));
+                  }
+                } else {
+                  formatted.push('> _No response_');
+                  // Don't skip the next line since the while loop already advanced
+                }
+
+                formatted.push(''); // blank line after each field
+                continue;
+              }
+
+              formatted.push(line);
+              i++;
+            }
+
+            body = formatted.join('\n');
+
+            // --- 3. Insert section headers ---
             const sections = [
-              { before: '### Affiliate / Business Unit', header: '## 1. Basics' },
-              { before: '### Problem Statement', header: '## 2. Problem & Solution' },
-              { before: '### Success Metrics (Initial)', header: '## 3. Market & Evidence' },
-              { before: '### SaaS Readiness (Initial)', header: '## 4. Technical Readiness' },
-              { before: '### Requested Support - Microsoft', header: '## 5. Requested Support' },
-              { before: '### Initial Resource Estimate', header: '## 6. Planning & Ownership' },
+              { before: '**Affiliate / Business Unit**', header: '## 1. Basics' },
+              { before: '**Problem Statement**', header: '## 2. Problem & Solution' },
+              { before: '**Success Metrics (Initial)**', header: '## 3. Market & Evidence' },
+              { before: '**SaaS Readiness (Initial)**', header: '## 4. Technical Readiness' },
+              { before: '**Requested Support - Microsoft**', header: '## 5. Requested Support' },
+              { before: '**Initial Resource Estimate**', header: '## 6. Planning & Ownership' },
             ];
 
-            // Insert section headers
             for (const section of sections) {
               if (body.includes(section.before)) {
                 body = body.replace(section.before, `---\n\n${section.header}\n\n${section.before}`);
