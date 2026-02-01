@@ -22,8 +22,15 @@ jobs:
           script: |
             const issue = context.payload.issue;
             const labelAdded = context.payload.label.name;
-            const body = issue.body || '';
             const currentLabels = issue.labels.map(l => l.name);
+
+            // Re-fetch issue to get latest body
+            const { data: freshIssue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number
+            });
+            const body = freshIssue.body || '';
 
             // Only process stage and decision labels
             const isStageLabel = labelAdded.startsWith('stage:');
@@ -78,84 +85,54 @@ jobs:
               return { checked, unchecked, total: checked + unchecked };
             }
 
-            // Helper: get all comments on the issue
-            async function getComments() {
-              const comments = await github.rest.issues.listComments({
+            // Helper: update issue body (append checklist)
+            async function appendToBody(checklist) {
+              const newBody = body + '\n\n' + checklist;
+              await github.rest.issues.update({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issue.number,
-                per_page: 100
+                body: newBody
               });
-              return comments.data;
             }
 
-            // Helper: find checklist completion in issue body + comments
-            async function findStageChecklist(stageName) {
-              // Check issue body first
-              const bodyStatus = checklistStatus(body);
+            // Helper: block transition
+            async function blockTransition(fromStage, toStage, toLabel, reason) {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                name: toLabel
+              });
 
-              // Check comments for stage-specific checklists
-              const comments = await getComments();
-              for (const comment of comments) {
-                if (comment.body.includes(`${stageName} Stage`) || comment.body.includes(`${stageName} Checklist`)) {
-                  const status = checklistStatus(comment.body);
-                  if (status.total > 0) return status;
-                }
-              }
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: ['status:needs-info']
+              });
 
-              // Fall back to issue body
-              return bodyStatus;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `⛔ **Stage transition blocked: ${fromStage} → ${toStage}**\n\n${reason}`
+              });
             }
 
-            // === GATE CHECKS ===
-
-            // Gate: Ideate → Validate
-            if (labelAdded === 'stage:validate') {
-              const status = await findStageChecklist('Ideate');
-
-              if (status.total > 0 && status.unchecked > 0) {
-                // Block transition
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:validate'
-                });
-
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  labels: ['status:needs-info']
-                });
-
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: `⛔ **Stage transition blocked: Ideate → Validate**\n\nThe Ideate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Ideate checklist items before transitioning to Validate.`
-                });
-
-                core.setOutput('notification_event', 'stage-transition-blocked');
-                core.setOutput('notification_vars', JSON.stringify({
-                  previous_stage: 'Ideate',
-                  current_stage: 'Validate',
-                  blocked_reason: `Ideate checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
-                }));
-                return;
+            // Helper: swap labels on successful transition
+            async function swapLabels(oldStageLabel, newStageLabel) {
+              if (currentLabels.includes(oldStageLabel)) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: issue.number,
+                    name: oldStageLabel
+                  });
+                } catch (e) {}
               }
 
-              // Remove old stage label
-              if (currentLabels.includes('stage:ideate')) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:ideate'
-                });
-              }
-
-              // Update stakeholder label
               for (const sl of ['stakeholder:bu', 'stakeholder:group', 'stakeholder:msft']) {
                 if (currentLabels.includes(sl)) {
                   try {
@@ -172,10 +149,9 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issue.number,
-                labels: [stakeholderMap['stage:validate']]
+                labels: [stakeholderMap[newStageLabel]]
               });
 
-              // Remove ready-for-review if present
               if (currentLabels.includes('status:ready-for-review')) {
                 try {
                   await github.rest.issues.removeLabel({
@@ -186,19 +162,15 @@ jobs:
                   });
                 } catch (e) {}
               }
+            }
 
-              // Post Validate stage checklist
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `## ✅ Transitioned to Validate Stage
+            // === STAGE CHECKLISTS (appended to issue body) ===
 
-            **Lead:** Group | **Support:** BUs, Microsoft
-
-            ---
+            const validateChecklist = `---
 
             ## Validate Stage Checklist
+
+            **Lead:** Group | **Support:** BUs, Microsoft
 
             ### Prioritization Scorecard (14 criteria, scored 0–5, weighted to 100 pts)
 
@@ -250,156 +222,13 @@ jobs:
             > - \`decision:kill\` — KILL: idea not viable
 
             **Decision notes / conditions / dependencies:**
-            _[To be filled by reviewer]_`
-              });
+            _[To be filled by reviewer]_`.replace(/^            /gm, '');
 
-              core.setOutput('notification_event', 'stage-transition-success');
-              core.setOutput('notification_vars', JSON.stringify({
-                previous_stage: 'Ideate',
-                current_stage: 'Validate'
-              }));
-            }
-
-            // Gate: Validate → Build
-            if (labelAdded === 'stage:build') {
-              // Check for GO decision label
-              const hasGoDecision = currentLabels.some(l => l.startsWith('decision:go'));
-              const hasRedFlag = currentLabels.includes('status:red-flag');
-
-              if (!hasGoDecision) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:build'
-                });
-
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: `⛔ **Stage transition blocked: Validate → Build**\n\nA GO decision label is required before moving to Build.\n\nPlease apply one of:\n- \`decision:go-fast-track\`\n- \`decision:go-modernize\`\n\nIf the idea is not approved, apply \`decision:hold\` or \`decision:kill\` instead.`
-                });
-
-                core.setOutput('notification_event', 'stage-transition-blocked');
-                core.setOutput('notification_vars', JSON.stringify({
-                  previous_stage: 'Validate',
-                  current_stage: 'Build',
-                  blocked_reason: 'A GO decision label is required before moving to Build'
-                }));
-                return;
-              }
-
-              if (hasRedFlag) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:build'
-                });
-
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: `⛔ **Stage transition blocked: Validate → Build**\n\nA \`status:red-flag\` override is active. Red-flag issues must be resolved before proceeding to Build.\n\n**Red-flag overrides (auto HOLD until resolved):**\n- No viable tenancy or data isolation approach for target segment\n- No design partner or pilot path (no credible customer access)\n- No accountable product owner (unowned initiative)\n- Unit economics structurally negative with no mitigation path\n\nRemove the \`status:red-flag\` label once all issues are resolved.`
-                });
-
-                core.setOutput('notification_event', 'stage-transition-blocked');
-                core.setOutput('notification_vars', JSON.stringify({
-                  previous_stage: 'Validate',
-                  current_stage: 'Build',
-                  blocked_reason: 'Red-flag override is active — must be resolved before proceeding to Build'
-                }));
-                return;
-              }
-
-              // Check Validate checklist completion
-              const status = await findStageChecklist('Validate');
-              if (status.total > 0 && status.unchecked > 0) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:build'
-                });
-
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  labels: ['status:needs-info']
-                });
-
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: `⛔ **Stage transition blocked: Validate → Build**\n\nThe Validate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Validate checklist items before transitioning to Build.`
-                });
-
-                core.setOutput('notification_event', 'stage-transition-blocked');
-                core.setOutput('notification_vars', JSON.stringify({
-                  previous_stage: 'Validate',
-                  current_stage: 'Build',
-                  blocked_reason: `Validate checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
-                }));
-                return;
-              }
-
-              // Remove old stage label
-              if (currentLabels.includes('stage:validate')) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:validate'
-                });
-              }
-
-              // Update stakeholder label
-              for (const sl of ['stakeholder:bu', 'stakeholder:group', 'stakeholder:msft']) {
-                if (currentLabels.includes(sl)) {
-                  try {
-                    await github.rest.issues.removeLabel({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      issue_number: issue.number,
-                      name: sl
-                    });
-                  } catch (e) {}
-                }
-              }
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                labels: [stakeholderMap['stage:build']]
-              });
-
-              if (currentLabels.includes('status:ready-for-review')) {
-                try {
-                  await github.rest.issues.removeLabel({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: issue.number,
-                    name: 'status:ready-for-review'
-                  });
-                } catch (e) {}
-              }
-
-              // Post Build stage checklist (Product Intake Checklist)
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `## ✅ Transitioned to Build Stage
-
-            **Lead:** BUs | **Support:** Group (ISE Engineers), Microsoft (Co-build, PLG)
-
-            ---
+            const buildChecklist = `---
 
             ## Build Stage — Product Intake Checklist
+
+            **Lead:** BUs | **Support:** Group (ISE Engineers), Microsoft (Co-build, PLG)
 
             ### Business
             - [ ] Problem statement & ICP defined (Must, Owner: G42)
@@ -461,104 +290,13 @@ jobs:
             ### Product Roadmap (12–18 months)
             - [ ] MVP phase (0–90 days) — outcome, capabilities, milestones, dependencies
             - [ ] GA phase (90–180 days) — outcome, capabilities, milestones, dependencies
-            - [ ] Scale phase (6–12 months) — outcome, capabilities, milestones, dependencies`
-              });
+            - [ ] Scale phase (6–12 months) — outcome, capabilities, milestones, dependencies`.replace(/^            /gm, '');
 
-              core.setOutput('notification_event', 'stage-transition-success');
-              core.setOutput('notification_vars', JSON.stringify({
-                previous_stage: 'Validate',
-                current_stage: 'Build'
-              }));
-            }
-
-            // Gate: Build → Sell
-            if (labelAdded === 'stage:sell') {
-              const status = await findStageChecklist('Build');
-
-              if (status.total > 0 && status.unchecked > 0) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:sell'
-                });
-
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  labels: ['status:needs-info']
-                });
-
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: `⛔ **Stage transition blocked: Build → Sell**\n\nThe Build stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nAll **Must** items in the Product Intake Checklist must be complete before transitioning to Sell.`
-                });
-
-                core.setOutput('notification_event', 'stage-transition-blocked');
-                core.setOutput('notification_vars', JSON.stringify({
-                  previous_stage: 'Build',
-                  current_stage: 'Sell',
-                  blocked_reason: `Build checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
-                }));
-                return;
-              }
-
-              // Remove old stage label
-              if (currentLabels.includes('stage:build')) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:build'
-                });
-              }
-
-              // Update stakeholder label
-              for (const sl of ['stakeholder:bu', 'stakeholder:group', 'stakeholder:msft']) {
-                if (currentLabels.includes(sl)) {
-                  try {
-                    await github.rest.issues.removeLabel({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      issue_number: issue.number,
-                      name: sl
-                    });
-                  } catch (e) {}
-                }
-              }
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                labels: [stakeholderMap['stage:sell']]
-              });
-
-              if (currentLabels.includes('status:ready-for-review')) {
-                try {
-                  await github.rest.issues.removeLabel({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: issue.number,
-                    name: 'status:ready-for-review'
-                  });
-                } catch (e) {}
-              }
-
-              // Post Sell stage checklist
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `## ✅ Transitioned to Sell Stage
-
-            **Lead:** BUs (product sales with Group coordination) | **Group:** Strategic int'l markets and I3 accounts | **Microsoft:** Azure Marketplace activation
-
-            ---
+            const sellChecklist = `---
 
             ## Sell Stage Checklist
+
+            **Lead:** BUs (product sales with Group coordination) | **Group:** Strategic int'l markets and I3 accounts | **Microsoft:** Azure Marketplace activation
 
             ### Pricing & Packaging
             - [ ] Pricing tiers established
@@ -583,104 +321,13 @@ jobs:
             ### Customer Acquisition
             - [ ] Pilot customers onboarded
             - [ ] Reference customers identified
-            - [ ] Revenue recognized`
-              });
+            - [ ] Revenue recognized`.replace(/^            /gm, '');
 
-              core.setOutput('notification_event', 'stage-transition-success');
-              core.setOutput('notification_vars', JSON.stringify({
-                previous_stage: 'Build',
-                current_stage: 'Sell'
-              }));
-            }
-
-            // Gate: Sell → Review
-            if (labelAdded === 'stage:review') {
-              const status = await findStageChecklist('Sell');
-
-              if (status.total > 0 && status.unchecked > 0) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:review'
-                });
-
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  labels: ['status:needs-info']
-                });
-
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  body: `⛔ **Stage transition blocked: Sell → Review**\n\nThe Sell stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Sell checklist items before transitioning to Review.`
-                });
-
-                core.setOutput('notification_event', 'stage-transition-blocked');
-                core.setOutput('notification_vars', JSON.stringify({
-                  previous_stage: 'Sell',
-                  current_stage: 'Review',
-                  blocked_reason: `Sell checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
-                }));
-                return;
-              }
-
-              // Remove old stage label
-              if (currentLabels.includes('stage:sell')) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issue.number,
-                  name: 'stage:sell'
-                });
-              }
-
-              // Update stakeholder label
-              for (const sl of ['stakeholder:bu', 'stakeholder:group', 'stakeholder:msft']) {
-                if (currentLabels.includes(sl)) {
-                  try {
-                    await github.rest.issues.removeLabel({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      issue_number: issue.number,
-                      name: sl
-                    });
-                  } catch (e) {}
-                }
-              }
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                labels: [stakeholderMap['stage:review']]
-              });
-
-              if (currentLabels.includes('status:ready-for-review')) {
-                try {
-                  await github.rest.issues.removeLabel({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: issue.number,
-                    name: 'status:ready-for-review'
-                  });
-                } catch (e) {}
-              }
-
-              // Post Review stage checklist
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issue.number,
-                body: `## ✅ Transitioned to Review Stage
-
-            **Lead:** Group (define/standardize KPIs) | **BUs:** Track Success KPIs, support feedback loops | **Microsoft:** Unified Support for similar services
-
-            ---
+            const reviewChecklist = `---
 
             ## Review Stage Checklist
+
+            **Lead:** Group (define/standardize KPIs) | **BUs:** Track Success KPIs, support feedback loops | **Microsoft:** Unified Support for similar services
 
             ### KPI Tracking
             | Category | Metrics |
@@ -716,8 +363,139 @@ jobs:
 
             ---
 
-            > This is a continuous cycle. Schedule regular reviews and update this checklist each quarter.`
-              });
+            > This is a continuous cycle. Schedule regular reviews and update this checklist each quarter.`.replace(/^            /gm, '');
+
+            // === GATE CHECKS ===
+
+            // Gate: Ideate → Validate
+            if (labelAdded === 'stage:validate') {
+              const status = checklistStatus(body);
+
+              if (status.total > 0 && status.unchecked > 0) {
+                await blockTransition('Ideate', 'Validate', 'stage:validate',
+                  `The Ideate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Ideate checklist items before transitioning to Validate.`);
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Ideate',
+                  current_stage: 'Validate',
+                  blocked_reason: `Ideate checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                }));
+                return;
+              }
+
+              await swapLabels('stage:ideate', 'stage:validate');
+              await appendToBody(validateChecklist);
+
+              core.setOutput('notification_event', 'stage-transition-success');
+              core.setOutput('notification_vars', JSON.stringify({
+                previous_stage: 'Ideate',
+                current_stage: 'Validate'
+              }));
+            }
+
+            // Gate: Validate → Build
+            if (labelAdded === 'stage:build') {
+              const hasGoDecision = currentLabels.some(l => l.startsWith('decision:go'));
+              const hasRedFlag = currentLabels.includes('status:red-flag');
+
+              if (!hasGoDecision) {
+                await blockTransition('Validate', 'Build', 'stage:build',
+                  `A GO decision label is required before moving to Build.\n\nPlease apply one of:\n- \`decision:go-fast-track\`\n- \`decision:go-modernize\`\n\nIf the idea is not approved, apply \`decision:hold\` or \`decision:kill\` instead.`);
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Validate',
+                  current_stage: 'Build',
+                  blocked_reason: 'A GO decision label is required before moving to Build'
+                }));
+                return;
+              }
+
+              if (hasRedFlag) {
+                await blockTransition('Validate', 'Build', 'stage:build',
+                  `A \`status:red-flag\` override is active. Red-flag issues must be resolved before proceeding to Build.\n\n**Red-flag overrides (auto HOLD until resolved):**\n- No viable tenancy or data isolation approach for target segment\n- No design partner or pilot path (no credible customer access)\n- No accountable product owner (unowned initiative)\n- Unit economics structurally negative with no mitigation path\n\nRemove the \`status:red-flag\` label once all issues are resolved.`);
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Validate',
+                  current_stage: 'Build',
+                  blocked_reason: 'Red-flag override is active — must be resolved before proceeding to Build'
+                }));
+                return;
+              }
+
+              const status = checklistStatus(body);
+              // Only check if there are Validate checklist items
+              if (body.includes('Validate Stage Checklist') && status.total > 0 && status.unchecked > 0) {
+                await blockTransition('Validate', 'Build', 'stage:build',
+                  `The Validate stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Validate checklist items before transitioning to Build.`);
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Validate',
+                  current_stage: 'Build',
+                  blocked_reason: `Validate checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                }));
+                return;
+              }
+
+              await swapLabels('stage:validate', 'stage:build');
+              await appendToBody(buildChecklist);
+
+              core.setOutput('notification_event', 'stage-transition-success');
+              core.setOutput('notification_vars', JSON.stringify({
+                previous_stage: 'Validate',
+                current_stage: 'Build'
+              }));
+            }
+
+            // Gate: Build → Sell
+            if (labelAdded === 'stage:sell') {
+              const status = checklistStatus(body);
+
+              if (body.includes('Build Stage') && status.total > 0 && status.unchecked > 0) {
+                await blockTransition('Build', 'Sell', 'stage:sell',
+                  `The Build stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nAll **Must** items in the Product Intake Checklist must be complete before transitioning to Sell.`);
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Build',
+                  current_stage: 'Sell',
+                  blocked_reason: `Build checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                }));
+                return;
+              }
+
+              await swapLabels('stage:build', 'stage:sell');
+              await appendToBody(sellChecklist);
+
+              core.setOutput('notification_event', 'stage-transition-success');
+              core.setOutput('notification_vars', JSON.stringify({
+                previous_stage: 'Build',
+                current_stage: 'Sell'
+              }));
+            }
+
+            // Gate: Sell → Review
+            if (labelAdded === 'stage:review') {
+              const status = checklistStatus(body);
+
+              if (body.includes('Sell Stage Checklist') && status.total > 0 && status.unchecked > 0) {
+                await blockTransition('Sell', 'Review', 'stage:review',
+                  `The Sell stage checklist is not complete. ${status.unchecked} of ${status.total} items still need to be checked.\n\nPlease complete all Sell checklist items before transitioning to Review.`);
+
+                core.setOutput('notification_event', 'stage-transition-blocked');
+                core.setOutput('notification_vars', JSON.stringify({
+                  previous_stage: 'Sell',
+                  current_stage: 'Review',
+                  blocked_reason: `Sell checklist incomplete: ${status.unchecked} of ${status.total} items still unchecked`
+                }));
+                return;
+              }
+
+              await swapLabels('stage:sell', 'stage:review');
+              await appendToBody(reviewChecklist);
 
               core.setOutput('notification_event', 'stage-transition-success');
               core.setOutput('notification_vars', JSON.stringify({
@@ -725,6 +503,79 @@ jobs:
                 current_stage: 'Review'
               }));
             }
+
+  sync-board:
+    needs: stage-gate
+    if: needs.stage-gate.outputs.notification_event == 'stage-transition-success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync Stage Label to Project Board
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const PROJECT_ID = 'PVT_kwHOALNmH84BNitD';
+            const STAGE_FIELD_ID = 'PVTSSF_lAHOALNmH84BNitDzg8gaUE';
+
+            const labelToOption = {
+              'stage:ideate':    'a2cbc606',
+              'stage:validate':  '191386a7',
+              'stage:build':     'a6a853b2',
+              'stage:sell':      '4eddb5b2',
+              'stage:review':    'c420d033'
+            };
+
+            const newStageLabel = context.payload.label.name;
+            const optionId = labelToOption[newStageLabel];
+            if (!optionId) return;
+
+            // Find the project item ID for this issue
+            const query = `query($projectId: ID!) {
+              node(id: $projectId) {
+                ... on ProjectV2 {
+                  items(first: 100) {
+                    nodes {
+                      id
+                      content {
+                        ... on Issue {
+                          number
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }`;
+
+            const result = await github.graphql(query, { projectId: PROJECT_ID });
+            const items = result.node.items.nodes;
+            const item = items.find(i => i.content?.number === context.payload.issue.number);
+
+            if (!item) {
+              console.log('Issue not found on project board, skipping sync.');
+              return;
+            }
+
+            // Update the Stage field on the project board
+            const mutation = `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $projectId
+                itemId: $itemId
+                fieldId: $fieldId
+                value: { singleSelectOptionId: $optionId }
+              }) {
+                projectV2Item { id }
+              }
+            }`;
+
+            await github.graphql(mutation, {
+              projectId: PROJECT_ID,
+              itemId: item.id,
+              fieldId: STAGE_FIELD_ID,
+              optionId: optionId
+            });
+
+            console.log(`Synced board to ${newStageLabel} for issue #${context.payload.issue.number}`);
 
   notify-submitter:
     needs: stage-gate

@@ -1,0 +1,161 @@
+name: Project Board Sync
+
+# Sync project board column changes to stage labels.
+# When a card is moved on the project board, this workflow
+# detects the new column and applies the corresponding stage label,
+# which then triggers the stage-gate-transition workflow.
+
+on:
+  # GitHub does not emit webhook events for ProjectV2 column changes,
+  # so we poll on a schedule and also allow manual trigger.
+  schedule:
+    - cron: '*/5 * * * *' # every 5 minutes
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  sync-board-to-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync Project Board Stages to Labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            // Project board configuration
+            const PROJECT_ID = 'PVT_kwHOALNmH84BNitD';
+            const STAGE_FIELD_ID = 'PVTSSF_lAHOALNmH84BNitDzg8gaUE';
+
+            // Map project board column option IDs to stage labels
+            const optionToLabel = {
+              'c14ac672': null,              // Backlog — no stage label
+              'a2cbc606': 'stage:ideate',    // Ideate
+              '191386a7': 'stage:validate',  // Validate
+              'a6a853b2': 'stage:build',     // Build
+              '4eddb5b2': 'stage:sell',      // Sell
+              'c420d033': 'stage:review',    // Review
+              'fde6108e': null,              // Completed — handled separately
+              'f8d2a5e0': null               // Rejected — handled separately
+            };
+
+            const allStageLabels = [
+              'stage:ideate', 'stage:validate', 'stage:build',
+              'stage:sell', 'stage:review'
+            ];
+
+            // Query all items in the project with their stage field value
+            const query = `query {
+              node(id: "${PROJECT_ID}") {
+                ... on ProjectV2 {
+                  items(first: 100) {
+                    nodes {
+                      content {
+                        ... on Issue {
+                          number
+                          labels(first: 20) {
+                            nodes { name }
+                          }
+                          repository {
+                            owner { login }
+                            name
+                          }
+                        }
+                      }
+                      fieldValueByName(name: "Stage") {
+                        ... on ProjectV2ItemFieldSingleSelectValue {
+                          optionId
+                          name
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }`;
+
+            const result = await github.graphql(query);
+            const items = result.node.items.nodes;
+
+            for (const item of items) {
+              // Skip non-issue items (e.g. draft items)
+              if (!item.content || !item.content.number) continue;
+
+              const issueNumber = item.content.number;
+              const repo = item.content.repository;
+              const currentLabels = item.content.labels.nodes.map(l => l.name);
+              const stageField = item.fieldValueByName;
+
+              // Get the expected stage label from the board column
+              const optionId = stageField?.optionId;
+              const expectedLabel = optionId ? optionToLabel[optionId] : null;
+
+              // Get the current stage label on the issue
+              const currentStageLabel = currentLabels.find(l => l.startsWith('stage:'));
+
+              // If board says a stage that differs from the issue label, sync it
+              if (expectedLabel && expectedLabel !== currentStageLabel) {
+                console.log(`Issue #${issueNumber}: board="${stageField.name}" (${expectedLabel}), label="${currentStageLabel || 'none'}". Syncing...`);
+
+                // Apply the new stage label — this triggers stage-gate-transition.yml
+                await github.rest.issues.addLabels({
+                  owner: repo.owner.login,
+                  repo: repo.name,
+                  issue_number: issueNumber,
+                  labels: [expectedLabel]
+                });
+              }
+
+              // Handle Completed column — close the issue
+              if (optionId === 'fde6108e' && currentLabels.find(l => l.startsWith('stage:'))) {
+                const { data: issueData } = await github.rest.issues.get({
+                  owner: repo.owner.login,
+                  repo: repo.name,
+                  issue_number: issueNumber
+                });
+
+                if (issueData.state === 'open') {
+                  console.log(`Issue #${issueNumber}: moved to Completed. Closing.`);
+                  await github.rest.issues.update({
+                    owner: repo.owner.login,
+                    repo: repo.name,
+                    issue_number: issueNumber,
+                    state: 'closed',
+                    state_reason: 'completed'
+                  });
+                }
+              }
+
+              // Handle Rejected column — close as not planned
+              if (optionId === 'f8d2a5e0') {
+                const { data: issueData } = await github.rest.issues.get({
+                  owner: repo.owner.login,
+                  repo: repo.name,
+                  issue_number: issueNumber
+                });
+
+                if (issueData.state === 'open') {
+                  console.log(`Issue #${issueNumber}: moved to Rejected. Closing as not planned.`);
+                  await github.rest.issues.update({
+                    owner: repo.owner.login,
+                    repo: repo.name,
+                    issue_number: issueNumber,
+                    state: 'closed',
+                    state_reason: 'not_planned'
+                  });
+
+                  if (!currentLabels.includes('decision:kill')) {
+                    await github.rest.issues.addLabels({
+                      owner: repo.owner.login,
+                      repo: repo.name,
+                      issue_number: issueNumber,
+                      labels: ['decision:kill']
+                    });
+                  }
+                }
+              }
+            }
+
+            console.log('Board sync complete.');

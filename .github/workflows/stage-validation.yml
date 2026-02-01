@@ -27,46 +27,14 @@ jobs:
             const currentStage = currentLabels.find(l => l.startsWith('stage:'));
             if (!currentStage) return;
 
-            // Count checkboxes in issue body
-            const bodyChecked = (body.match(/- \[x\]/gi) || []).length;
-            const bodyUnchecked = (body.match(/- \[ \]/g) || []).length;
-
-            // Also check comments for stage-specific checklists
-            const comments = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issue.number,
-              per_page: 100
-            });
-
-            let totalChecked = bodyChecked;
-            let totalUnchecked = bodyUnchecked;
-
-            // Stage-specific comment checklist names
-            const stageChecklistHeaders = {
-              'stage:validate': 'Validate Stage Checklist',
-              'stage:build': 'Build Stage',
-              'stage:sell': 'Sell Stage Checklist',
-              'stage:review': 'Review Stage Checklist'
-            };
-
-            const header = stageChecklistHeaders[currentStage];
-            if (header) {
-              for (const comment of comments.data) {
-                if (comment.body.includes(header)) {
-                  const checked = (comment.body.match(/- \[x\]/gi) || []).length;
-                  const unchecked = (comment.body.match(/- \[ \]/g) || []).length;
-                  totalChecked += checked;
-                  totalUnchecked += unchecked;
-                }
-              }
-            }
-
-            const totalBoxes = totalChecked + totalUnchecked;
+            // Count checkboxes in issue body (checklists are appended to the body)
+            const checked = (body.match(/- \[x\]/gi) || []).length;
+            const unchecked = (body.match(/- \[ \]/g) || []).length;
+            const totalBoxes = checked + unchecked;
             const hasReadyLabel = currentLabels.includes('status:ready-for-review');
 
             // If all boxes checked and doesn't have ready label, add it
-            if (totalBoxes > 0 && totalUnchecked === 0 && !hasReadyLabel) {
+            if (totalBoxes > 0 && unchecked === 0 && !hasReadyLabel) {
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -95,7 +63,7 @@ jobs:
             }
 
             // If boxes unchecked and has ready label, remove it
-            if (totalUnchecked > 0 && hasReadyLabel) {
+            if (unchecked > 0 && hasReadyLabel) {
               await github.rest.issues.removeLabel({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
