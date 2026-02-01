@@ -110,12 +110,24 @@ jobs:
               });
             }
 
-  notify-idea-submitted:
+  notify-submitter:
     needs: add-labels
     uses: ./.github/workflows/send-notifications.yml
     with:
-      event_type: idea-submitted
+      event_type: idea-submitted-submitter
       issue_number: ${{ github.event.issue.number }}
+      recipients: submitter_only
+    secrets:
+      POWER_AUTOMATE_WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}
+      ADMIN_NOTIFICATION_EMAILS: ${{ secrets.ADMIN_NOTIFICATION_EMAILS }}
+
+  notify-admins:
+    needs: add-labels
+    uses: ./.github/workflows/send-notifications.yml
+    with:
+      event_type: idea-submitted-admin
+      issue_number: ${{ github.event.issue.number }}
+      recipients: admins_only
       notify_admins: true
     secrets:
       POWER_AUTOMATE_WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}

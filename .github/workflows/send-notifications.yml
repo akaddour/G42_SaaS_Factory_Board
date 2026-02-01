@@ -17,10 +17,15 @@ on:
         type: string
         default: '{}'
       notify_admins:
-        description: 'Whether to CC admin group'
+        description: 'Whether to send to admin group'
         required: false
         type: boolean
         default: false
+      recipients:
+        description: 'Who to send to: "all" (submitter + owners), "submitter_only", or "admins_only"'
+        required: false
+        type: string
+        default: 'all'
     secrets:
       POWER_AUTOMATE_WEBHOOK_URL:
         required: false
@@ -45,6 +50,8 @@ jobs:
           EVENT_TYPE: ${{ inputs.event_type }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
           EXTRA_VARS: ${{ inputs.extra_vars }}
+          RECIPIENTS: ${{ inputs.recipients }}
+          NOTIFY_ADMINS: ${{ inputs.notify_admins }}
         with:
           script: |
             const fs = require('fs');
@@ -98,19 +105,30 @@ jobs:
             };
             const currentStage = stageLabel ? (stageNames[stageLabel] || stageLabel) : 'Unknown';
 
-            // Collect recipient emails
+            // Collect recipient emails based on recipients setting
+            const recipientMode = process.env.RECIPIENTS || 'all';
             const toEmails = new Set();
-            if (submitterEmail) {
-              toEmails.add(submitterEmail);
-            }
-            const ownerEmails = extractEmails(namedOwners);
-            ownerEmails.forEach(e => toEmails.add(e));
-
-            // CC admins if requested
             const ccEmails = [];
-            if (process.env.ADMIN_EMAILS) {
+
+            if (recipientMode === 'submitter_only') {
+              if (submitterEmail) toEmails.add(submitterEmail);
+            } else if (recipientMode === 'admins_only') {
+              // Only admins, added below
+            } else {
+              // 'all' — submitter + named owners
+              if (submitterEmail) toEmails.add(submitterEmail);
+              const ownerEmails = extractEmails(namedOwners);
+              ownerEmails.forEach(e => toEmails.add(e));
+            }
+
+            // Add admins
+            if (process.env.ADMIN_EMAILS && (recipientMode === 'admins_only' || process.env.NOTIFY_ADMINS === 'true')) {
               const adminList = process.env.ADMIN_EMAILS.split(',').map(e => e.trim()).filter(Boolean);
-              ccEmails.push(...adminList);
+              if (recipientMode === 'admins_only') {
+                adminList.forEach(e => toEmails.add(e));
+              } else {
+                ccEmails.push(...adminList);
+              }
             }
 
             // If no recipients found, skip
