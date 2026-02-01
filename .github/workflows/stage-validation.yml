@@ -104,13 +104,26 @@ jobs:
               });
             }
 
-  notify-checklist-complete:
+  notify-submitter-checklist:
     needs: check-checklist
     if: needs.check-checklist.outputs.checklist_complete == 'true'
     uses: ./.github/workflows/send-notifications.yml
     with:
-      event_type: checklist-complete
+      event_type: checklist-complete-submitter
       issue_number: ${{ github.event.issue.number }}
+      recipients: submitter_only
+    secrets:
+      POWER_AUTOMATE_WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}
+      ADMIN_NOTIFICATION_EMAILS: ${{ secrets.ADMIN_NOTIFICATION_EMAILS }}
+
+  notify-admins-checklist:
+    needs: check-checklist
+    if: needs.check-checklist.outputs.checklist_complete == 'true'
+    uses: ./.github/workflows/send-notifications.yml
+    with:
+      event_type: checklist-complete-admin
+      issue_number: ${{ github.event.issue.number }}
+      recipients: admins_only
       notify_admins: true
     secrets:
       POWER_AUTOMATE_WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}

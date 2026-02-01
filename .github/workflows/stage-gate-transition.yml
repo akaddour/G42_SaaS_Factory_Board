@@ -726,15 +726,29 @@ jobs:
               }));
             }
 
-  send-notification:
+  notify-submitter:
     needs: stage-gate
     if: needs.stage-gate.outputs.notification_event != ''
     uses: ./.github/workflows/send-notifications.yml
     with:
-      event_type: ${{ needs.stage-gate.outputs.notification_event }}
+      event_type: ${{ needs.stage-gate.outputs.notification_event }}-submitter
       issue_number: ${{ github.event.issue.number }}
       extra_vars: ${{ needs.stage-gate.outputs.notification_vars }}
-      notify_admins: ${{ contains(fromJSON('["decision-made", "red-flag-raised", "stage-transition-blocked"]'), needs.stage-gate.outputs.notification_event) }}
+      recipients: submitter_only
+    secrets:
+      POWER_AUTOMATE_WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}
+      ADMIN_NOTIFICATION_EMAILS: ${{ secrets.ADMIN_NOTIFICATION_EMAILS }}
+
+  notify-admins:
+    needs: stage-gate
+    if: needs.stage-gate.outputs.notification_event != ''
+    uses: ./.github/workflows/send-notifications.yml
+    with:
+      event_type: ${{ needs.stage-gate.outputs.notification_event }}-admin
+      issue_number: ${{ github.event.issue.number }}
+      extra_vars: ${{ needs.stage-gate.outputs.notification_vars }}
+      recipients: admins_only
+      notify_admins: true
     secrets:
       POWER_AUTOMATE_WEBHOOK_URL: ${{ secrets.POWER_AUTOMATE_WEBHOOK_URL }}
       ADMIN_NOTIFICATION_EMAILS: ${{ secrets.ADMIN_NOTIFICATION_EMAILS }}
