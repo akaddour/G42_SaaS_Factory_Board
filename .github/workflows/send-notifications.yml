@@ -23,7 +23,7 @@ on:
         default: false
     secrets:
       POWER_AUTOMATE_WEBHOOK_URL:
-        required: true
+        required: false
       ADMIN_NOTIFICATION_EMAILS:
         required: false
 
