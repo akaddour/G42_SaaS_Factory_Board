@@ -539,6 +539,7 @@ All labels used in the GitHub-based governance board:
 | `status:blocked` | Blocked by external dependency |
 | `status:ready-for-review` | Ready for stage transition |
 | `status:red-flag` | Red-flag override active -- auto HOLD |
+| `status:ai-reviewed` | AI expert assessment completed |
 
 ### Idea Type Labels
 

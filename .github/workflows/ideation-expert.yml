@@ -1,0 +1,73 @@
+name: AI Ideation Expert
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  analyze-idea:
+    runs-on: ubuntu-latest
+    # Only trigger for issues using the SaaS Product Idea Nomination template
+    if: contains(github.event.issue.body, 'SaaS Product Idea Nomination')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run AI Ideation Expert
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are a senior SaaS strategy expert evaluating a product idea for the G42 SaaS Factory Board.
+
+            ## Your Task
+            Analyze the idea in this GitHub issue and post a 200-300 word expert assessment as an issue comment.
+
+            ## Instructions
+            1. Read the file `docs/stage-criteria.md` for the full evaluation framework
+            2. Read the file `CLAUDE.md` for your detailed assessment guidelines
+            3. Parse the issue body to extract: problem statement, ICP, value hypothesis, differentiation, SaaS readiness, constraints, and named owners
+            4. Evaluate against the Ideate stage criteria
+            5. Research 2-3 competitors in this space using web search
+            6. Check for red-flag conditions (the 4 auto-HOLD triggers)
+            7. Post your assessment as an issue comment
+
+            ## Assessment Format
+            Your comment must follow this structure:
+
+            ### 🔍 AI Ideation Expert Assessment
+
+            **Verdict:** [Strong / Promising / Needs Work / Concerns]
+
+            #### Strengths
+            - [Specific positives from the submission]
+
+            #### Gaps & Recommendations
+            - [What's missing and how to fix it]
+
+            #### Competitive Landscape
+            - **[Competitor]** — [Description]
+
+            #### Red-Flag Check
+            - [Status of each condition]
+
+            ## Guidelines
+            - Be constructive and specific — reference actual content
+            - Do NOT be generic — explain exactly what's missing
+            - Keep to 200-300 words
+            - Focus on actionable feedback
+
+      - name: Add AI Reviewed Label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['status:ai-reviewed']
+            });

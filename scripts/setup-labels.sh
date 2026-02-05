@@ -59,6 +59,7 @@ gh label create "status:needs-info" --description "Waiting for more information"
 gh label create "status:blocked" --description "Blocked by external dependency" --color "E99695" --repo $REPO 2>/dev/null || gh label edit "status:blocked" --description "Blocked by external dependency" --color "E99695" --repo $REPO
 gh label create "status:ready-for-review" --description "Ready for stage transition" --color "0E8A16" --repo $REPO 2>/dev/null || gh label edit "status:ready-for-review" --description "Ready for stage transition" --color "0E8A16" --repo $REPO
 gh label create "status:red-flag" --description "Red-flag override active - auto HOLD" --color "B60205" --repo $REPO 2>/dev/null || gh label edit "status:red-flag" --description "Red-flag override active - auto HOLD" --color "B60205" --repo $REPO
+gh label create "status:ai-reviewed" --description "AI expert assessment completed" --color "7057FF" --repo $REPO 2>/dev/null || gh label edit "status:ai-reviewed" --description "AI expert assessment completed" --color "7057FF" --repo $REPO
 
 # Idea Type Labels
 gh label create "type:greenfield" --description "New idea" --color "84B6EB" --repo $REPO 2>/dev/null || gh label edit "type:greenfield" --description "New idea" --color "84B6EB" --repo $REPO
