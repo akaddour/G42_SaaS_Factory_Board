@@ -7,7 +7,6 @@ on:
 permissions:
   contents: read
   issues: write
-  id-token: write
 
 jobs:
   analyze-idea:
@@ -18,28 +17,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run AI Ideation Expert
-        uses: anthropics/claude-code-action@beta
+      - name: Read evaluation criteria
+        id: criteria
+        run: |
+          CRITERIA=$(cat docs/stage-criteria.md)
+          echo "criteria<<EOF" >> $GITHUB_OUTPUT
+          echo "$CRITERIA" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Analyze idea with AI
+        id: analysis
+        uses: actions/github-script@v7
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          direct_prompt: |
-            You are a senior SaaS strategy expert evaluating a product idea for the G42 SaaS Factory Board.
+          script: |
+            const https = require('https');
 
-            ## Your Task
-            Analyze the idea in this GitHub issue and post a 200-300 word expert assessment as an issue comment.
+            const systemPrompt = `You are a senior SaaS strategy expert evaluating product ideas for the G42 SaaS Factory Board.
 
-            ## Instructions
-            1. Read the file `docs/stage-criteria.md` for the full evaluation framework
-            2. Read the file `CLAUDE.md` for your detailed assessment guidelines
-            3. Parse the issue body to extract: problem statement, ICP, value hypothesis, differentiation, SaaS readiness, constraints, and named owners
-            4. Evaluate against the Ideate stage criteria
-            5. Research 2-3 competitors in this space using web search
-            6. Check for red-flag conditions (the 4 auto-HOLD triggers)
-            7. Post your assessment as an issue comment
+            ## Evaluation Criteria
 
-            ## Assessment Format
-            Your comment must follow this structure:
+            ### Submission Completeness (5 Required Items)
+            1. Problem statement is clear and specific (not generic)
+            2. ICP (Ideal Customer Profile) is well-defined with specific personas
+            3. Success metrics are proposed and measurable
+            4. Constraints are captured (data residency, compliance, integrations)
+            5. Named owners are assigned (not TBD or placeholder names)
+
+            ### Quality Signals to Assess
+            - Is the value hypothesis quantified (cost savings, time saved, revenue impact)?
+            - Is differentiation specific to G42/Azure capabilities?
+            - Is SaaS readiness assessed (Track A/B)? Flag if marked "Unknown"
+            - Is there customer evidence (pipeline, existing customers)?
+
+            ### Red-Flag Conditions (Auto-HOLD)
+            1. No viable tenancy or data isolation approach for target segment
+            2. No design partner or pilot path (no credible customer access)
+            3. No accountable product owner (unowned initiative)
+            4. Unit economics structurally negative with no mitigation path
+
+            ## Output Format
+            Provide your assessment using EXACTLY this markdown structure (no extra formatting or headers):
 
             ### 🔍 AI Ideation Expert Assessment
 
@@ -52,16 +73,76 @@ jobs:
             - [What's missing and how to fix it]
 
             #### Competitive Landscape
-            - **[Competitor]** — [Description]
+            - **[Competitor 1]** — [Brief description]
+            - **[Competitor 2]** — [Brief description]
+            - **[Competitor 3]** — [Brief description]
 
             #### Red-Flag Check
-            - [Status of each condition]
+            - [Status of each of the 4 conditions: ✅ Clear / ⚠️ Warning / ❌ Flagged]
 
             ## Guidelines
-            - Be constructive and specific — reference actual content
+            - Be constructive and specific — reference actual content from the submission
             - Do NOT be generic — explain exactly what's missing
-            - Keep to 200-300 words
-            - Focus on actionable feedback
+            - Keep assessment to 200-300 words
+            - Focus on actionable feedback`;
+
+            const userPrompt = `Analyze this SaaS product idea submission:
+
+            **Title:** ${process.env.ISSUE_TITLE}
+
+            **Submission:**
+            ${process.env.ISSUE_BODY}
+
+            Provide your expert assessment following the exact format specified.`;
+
+            const requestBody = JSON.stringify({
+              model: 'claude-sonnet-4-20250514',
+              max_tokens: 1500,
+              messages: [
+                { role: 'user', content: userPrompt }
+              ],
+              system: systemPrompt
+            });
+
+            const options = {
+              hostname: 'api.anthropic.com',
+              path: '/v1/messages',
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': process.env.ANTHROPIC_API_KEY,
+                'anthropic-version': '2023-06-01'
+              }
+            };
+
+            const response = await new Promise((resolve, reject) => {
+              const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  if (res.statusCode === 200) {
+                    resolve(JSON.parse(data));
+                  } else {
+                    reject(new Error(`API error ${res.statusCode}: ${data}`));
+                  }
+                });
+              });
+              req.on('error', reject);
+              req.write(requestBody);
+              req.end();
+            });
+
+            const assessment = response.content[0].text;
+
+            // Post the comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: assessment
+            });
+
+            return assessment;
 
       - name: Add AI Reviewed Label
         uses: actions/github-script@v7
