@@ -7,6 +7,7 @@ on:
 permissions:
   contents: read
   issues: write
+  id-token: write
 
 jobs:
   analyze-idea:
@@ -21,7 +22,7 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: |
+          direct_prompt: |
             You are a senior SaaS strategy expert evaluating a product idea for the G42 SaaS Factory Board.
 
             ## Your Task
