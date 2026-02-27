@@ -4,13 +4,14 @@ set -euo pipefail
 # ============================================================
 # G42 SaaS Factory — Repository Migration Script
 # Migrates all files, labels, and project board to a new repo.
-# Usage: ./scripts/migrate.sh <target-org> <target-repo> [github-host]
-# Example: ./scripts/migrate.sh G42SaaSFactory Triage github.core42.ai
+# Usage: ./scripts/migrate.sh <target-org> <target-repo> [github-host] [project-number]
+# Example: ./scripts/migrate.sh G42SaaSFactory Triage github.core42.ai 3
 # ============================================================
 
-TARGET_ORG="${1:?Usage: ./scripts/migrate.sh <target-org> <target-repo> [github-host]}"
-TARGET_REPO="${2:?Usage: ./scripts/migrate.sh <target-org> <target-repo> [github-host]}"
+TARGET_ORG="${1:?Usage: ./scripts/migrate.sh <target-org> <target-repo> [github-host] [project-number]}"
+TARGET_REPO="${2:?Usage: ./scripts/migrate.sh <target-org> <target-repo> [github-host] [project-number]}"
 GH_HOST="${3:-github.core42.ai}"
+EXISTING_PROJECT_NUMBER="${4:-}"
 SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 NEW_ORG_REPO="${TARGET_ORG}/${TARGET_REPO}"
 TEMP_DIR=""
@@ -160,69 +161,73 @@ bash "${REPO_DIR}/scripts/setup-labels.sh" "${NEW_ORG_REPO}"
 
 echo "  Labels created."
 
-# ─── Step 6: Create project board ────────────────────────────
+# ─── Step 6: Project board setup ─────────────────────────────
 
 echo ""
-echo "=== Step 6: Creating project board ==="
+echo "=== Step 6: Setting up project board ==="
 
-# Create project — capture URL from text output (more reliable on GHE)
-PROJECT_OUTPUT=$(gh project create --owner "${TARGET_ORG}" --title "SaaS Factory Board" 2>&1)
-echo "$PROJECT_OUTPUT"
-
-# Try --format json first for project details, fall back to gh project list
-PROJECT_JSON=$(gh project list --owner "${TARGET_ORG}" --format json --jq '.projects[] | select(.title == "SaaS Factory Board")' 2>/dev/null || true)
-
-if [ -n "$PROJECT_JSON" ]; then
-  NEW_PROJECT_ID=$(echo "$PROJECT_JSON" | jq -r '.id')
-  PROJECT_NUMBER=$(echo "$PROJECT_JSON" | jq -r '.number')
+if [ -n "$EXISTING_PROJECT_NUMBER" ]; then
+  # Use the manually-created project
+  PROJECT_NUMBER="$EXISTING_PROJECT_NUMBER"
+  echo "  Using existing project #${PROJECT_NUMBER}"
 else
-  # Fall back to GraphQL query to find the project
-  echo "  Querying project via GraphQL..."
-  PROJECT_QUERY='query($owner: String!) {
-    organization(login: $owner) {
-      projectsV2(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
-        nodes { id number title }
-      }
-    }
-  }'
-  PROJECT_DATA=$(gh api graphql -f query="$PROJECT_QUERY" -f owner="${TARGET_ORG}" --jq '.data.organization.projectsV2.nodes[] | select(.title == "SaaS Factory Board")' 2>/dev/null || true)
+  # Create a new project
+  PROJECT_OUTPUT=$(gh project create --owner "${TARGET_ORG}" --title "SaaS Factory Board" 2>&1)
+  echo "$PROJECT_OUTPUT"
 
-  if [ -z "$PROJECT_DATA" ]; then
-    # Try as user instead of org
-    PROJECT_QUERY='query($owner: String!) {
-      user(login: $owner) {
-        projectsV2(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
-          nodes { id number title }
-        }
-      }
-    }'
-    PROJECT_DATA=$(gh api graphql -f query="$PROJECT_QUERY" -f owner="${TARGET_ORG}" --jq '.data.user.projectsV2.nodes[] | select(.title == "SaaS Factory Board")')
+  PROJECT_JSON=$(gh project list --owner "${TARGET_ORG}" --format json --jq '.projects[] | select(.title == "SaaS Factory Board")' 2>/dev/null || true)
+
+  if [ -n "$PROJECT_JSON" ]; then
+    PROJECT_NUMBER=$(echo "$PROJECT_JSON" | jq -r '.number')
+  else
+    echo "Error: Could not determine project number. Re-run with project number:"
+    echo "  ./scripts/migrate.sh ${TARGET_ORG} ${TARGET_REPO} ${GH_HOST} <project-number>"
+    exit 1
   fi
 
-  NEW_PROJECT_ID=$(echo "$PROJECT_DATA" | jq -r '.id')
-  PROJECT_NUMBER=$(echo "$PROJECT_DATA" | jq -r '.number')
+  # Add Stage single-select field
+  echo "  Adding Stage field..."
+  gh project field-create "$PROJECT_NUMBER" --owner "${TARGET_ORG}" \
+    --name "Stage" --data-type SINGLE_SELECT \
+    --single-select-options "Backlog,Ideate,Validate,Build,Sell,Review,Completed,Rejected"
 fi
 
 PROJECT_URL="https://${GH_HOST}/${URL_PREFIX}/${TARGET_ORG}/projects/${PROJECT_NUMBER}"
+echo "  Project URL: ${PROJECT_URL}"
 
-echo "  Project created: ${PROJECT_URL}"
+# Query project ID, field ID, and option IDs via GraphQL
+echo "  Querying project and field IDs via GraphQL..."
+
+# First get the project node ID
+PROJECT_ID_QUERY='query($owner: String!, $number: Int!) {
+  organization(login: $owner) {
+    projectV2(number: $number) {
+      id
+    }
+  }
+}'
+NEW_PROJECT_ID=$(gh api graphql -f query="$PROJECT_ID_QUERY" -f owner="${TARGET_ORG}" -F number="${PROJECT_NUMBER}" --jq '.data.organization.projectV2.id' 2>/dev/null || true)
+
+# Fall back to user query if org query fails
+if [ -z "$NEW_PROJECT_ID" ] || [ "$NEW_PROJECT_ID" = "null" ]; then
+  PROJECT_ID_QUERY='query($owner: String!, $number: Int!) {
+    user(login: $owner) {
+      projectV2(number: $number) {
+        id
+      }
+    }
+  }'
+  NEW_PROJECT_ID=$(gh api graphql -f query="$PROJECT_ID_QUERY" -f owner="${TARGET_ORG}" -F number="${PROJECT_NUMBER}" --jq '.data.user.projectV2.id')
+fi
+
 echo "  Project ID: ${NEW_PROJECT_ID}"
-echo "  Project Number: ${PROJECT_NUMBER}"
 
 if [ -z "$NEW_PROJECT_ID" ] || [ "$NEW_PROJECT_ID" = "null" ]; then
-  echo "Error: Could not determine project ID. Create the project board manually."
-  echo "  Then update workflow files with the project IDs."
+  echo "Error: Could not determine project ID."
   exit 1
 fi
 
-# Add Stage single-select field
-echo "  Adding Stage field..."
-gh project field-create "$PROJECT_NUMBER" --owner "${TARGET_ORG}" \
-  --name "Stage" --data-type SINGLE_SELECT \
-  --single-select-options "Backlog,Ideate,Validate,Build,Sell,Review,Completed,Rejected"
-
-# Query field and option IDs via GraphQL
-echo "  Querying field and option IDs..."
+# Query Stage field and option IDs
 FIELD_QUERY='query($projectId: ID!) {
   node(id: $projectId) {
     ... on ProjectV2 {
