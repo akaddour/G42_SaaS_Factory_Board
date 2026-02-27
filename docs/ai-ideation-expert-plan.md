@@ -122,7 +122,7 @@ jobs:
 
       - uses: anthropics/claude-code-action@v1
         with:
-          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          api_key: ${{ secrets.COMPASS_API_KEY }}
           prompt: |
             Analyze the idea in this GitHub issue. You are a senior SaaS strategy expert.
 
@@ -162,7 +162,7 @@ status:ai-reviewed  - "AI expert assessment completed"  - #7057FF (purple)
 
 | Secret | Purpose |
 |--------|---------|
-| `ANTHROPIC_API_KEY` | Anthropic API key for Claude Code Action |
+| `COMPASS_API_KEY` | Core42 Compass API key for AI Ideation Expert |
 
 ---
 
@@ -200,7 +200,7 @@ status:ai-reviewed  - "AI expert assessment completed"  - #7057FF (purple)
 
 ## Verification
 
-1. Add `ANTHROPIC_API_KEY` secret to the repository
+1. Add `COMPASS_API_KEY` secret to the repository
 2. Run `scripts/setup-labels.sh` to create the `status:ai-reviewed` label
 3. Create a test idea issue
 4. Verify the AI Ideation Expert workflow triggers

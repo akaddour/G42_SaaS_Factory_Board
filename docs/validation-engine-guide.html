@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G42 SaaS Factory — Validation Engine Guide</title>
+<style>
+  /* ═══════════════════════════════════════════════════════════
+     CSS VARIABLES & RESET
+     ═══════════════════════════════════════════════════════════ */
+  :root {
+    --g42-deep: #003366;
+    --g42-mid: #004d80;
+    --g42-teal: #00838F;
+    --g42-teal-light: #e0f2f3;
+    --g42-accent: #0077B6;
+    --ms-purple: #6264A7;
+    --ms-purple-light: #f3f2f8;
+    --go-green: #2e7d32;
+    --go-green-bg: #e8f5e9;
+    --hold-amber: #e65100;
+    --hold-amber-bg: #fff3e0;
+    --kill-red: #c62828;
+    --kill-red-bg: #ffebee;
+    --warn-amber: #f57c00;
+    --flag-red: #d32f2f;
+    --clear-green: #388e3c;
+    --text-primary: #1a1a2e;
+    --text-secondary: #4a4a6a;
+    --text-muted: #7a7a9a;
+    --border: #d0d5dd;
+    --border-light: #e8ecf0;
+    --bg-page: #ffffff;
+    --bg-subtle: #f8f9fb;
+    --bg-offset: #f0f2f5;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+    --shadow-card: 0 2px 8px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.1);
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: var(--text-primary);
+    background: var(--bg-page);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     PAGE & PRINT LAYOUT
+     ═══════════════════════════════════════════════════════════ */
+  .page {
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 20mm 18mm;
+    position: relative;
+  }
+
+  .page-break { page-break-before: always; }
+
+  @media print {
+    body { font-size: 9.5pt; background: white; }
+    .page { padding: 12mm 15mm; max-width: none; }
+    .page-break { page-break-before: always; }
+    .no-break { page-break-inside: avoid; }
+    .title-page { padding-top: 0; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; }
+    thead { display: table-header-group; }
+    .kanban-board { page-break-inside: avoid; }
+    .flow-diagram { page-break-inside: avoid; }
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     TYPOGRAPHY HIERARCHY
+     ═══════════════════════════════════════════════════════════ */
+  h1 {
+    font-size: 28pt;
+    font-weight: 700;
+    color: var(--g42-deep);
+    letter-spacing: -0.5px;
+    line-height: 1.15;
+  }
+
+  h2 {
+    font-size: 18pt;
+    font-weight: 700;
+    color: var(--g42-deep);
+    margin-bottom: 6pt;
+    padding-bottom: 6pt;
+    border-bottom: 3px solid var(--g42-teal);
+    letter-spacing: -0.3px;
+  }
+
+  h3 {
+    font-size: 13pt;
+    font-weight: 700;
+    color: var(--g42-deep);
+    margin-top: 18pt;
+    margin-bottom: 6pt;
+  }
+
+  h4 {
+    font-size: 11pt;
+    font-weight: 600;
+    color: var(--g42-mid);
+    margin-top: 14pt;
+    margin-bottom: 5pt;
+  }
+
+  p { margin-bottom: 8pt; }
+
+  .section-number {
+    display: inline-block;
+    background: var(--g42-deep);
+    color: white;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    border-radius: 50%;
+    font-size: 12pt;
+    font-weight: 700;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+
+  .subtitle {
+    font-size: 13pt;
+    color: var(--text-secondary);
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     TITLE PAGE
+     ═══════════════════════════════════════════════════════════ */
+  .title-page {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 247mm;
+    padding-left: 22mm;
+    padding-right: 22mm;
+    position: relative;
+  }
+
+  .title-page::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 8px;
+    height: 100%;
+    background: linear-gradient(180deg, var(--g42-deep), var(--g42-teal));
+  }
+
+  .title-page .logo-area {
+    font-size: 14pt;
+    font-weight: 700;
+    color: var(--g42-deep);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 60pt;
+  }
+
+  .title-page h1 {
+    font-size: 36pt;
+    margin-bottom: 12pt;
+    max-width: 480px;
+  }
+
+  .title-page .doc-subtitle {
+    font-size: 14pt;
+    color: var(--g42-teal);
+    font-weight: 500;
+    margin-bottom: 48pt;
+    max-width: 420px;
+    line-height: 1.5;
+  }
+
+  .title-meta {
+    display: flex;
+    gap: 40pt;
+    font-size: 9.5pt;
+    color: var(--text-secondary);
+  }
+
+  .title-meta dt {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 8pt;
+    color: var(--text-muted);
+    margin-bottom: 2pt;
+  }
+
+  .title-meta dd { font-weight: 500; color: var(--text-primary); }
+
+  .title-page .bottom-bar {
+    position: absolute;
+    bottom: 20mm;
+    left: 22mm;
+    right: 22mm;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .title-page .bottom-text {
+    position: absolute;
+    bottom: 12mm;
+    left: 22mm;
+    font-size: 8pt;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     TABLES
+     ═══════════════════════════════════════════════════════════ */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 10pt 0 16pt;
+    font-size: 9.5pt;
+  }
+
+  table th {
+    background: var(--g42-deep);
+    color: white;
+    font-weight: 600;
+    text-align: left;
+    padding: 7pt 10pt;
+    font-size: 9pt;
+    letter-spacing: 0.3px;
+  }
+
+  table td {
+    padding: 6pt 10pt;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: top;
+  }
+
+  table tr:nth-child(even) td { background: var(--bg-subtle); }
+  table tr:hover td { background: var(--bg-offset); }
+
+  table.compact td, table.compact th { padding: 4pt 8pt; font-size: 9pt; }
+
+  table.scorecard th:first-child { width: 30px; }
+  table.scorecard td:first-child { text-align: center; font-weight: 600; color: var(--g42-teal); }
+
+  /* Decision threshold table */
+  .threshold-table td:first-child { font-weight: 700; font-family: 'Segoe UI', monospace; }
+
+  /* ═══════════════════════════════════════════════════════════
+     PIPELINE DIAGRAM
+     ═══════════════════════════════════════════════════════════ */
+  .pipeline {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0;
+    margin: 20pt 0;
+    flex-wrap: nowrap;
+  }
+
+  .pipeline-stage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    position: relative;
+  }
+
+  .pipeline-box {
+    background: var(--g42-deep);
+    color: white;
+    padding: 10pt 6pt;
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    font-size: 10pt;
+    text-align: center;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    width: 100%;
+    max-width: 110px;
+    position: relative;
+  }
+
+  .pipeline-box.active {
+    background: var(--g42-teal);
+    box-shadow: 0 4px 16px rgba(0,131,143,0.3);
+  }
+
+  .pipeline-arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 2pt;
+    color: var(--g42-teal);
+    font-size: 18pt;
+    font-weight: 700;
+    margin-top: 8pt;
+    flex-shrink: 0;
+  }
+
+  .pipeline-desc {
+    font-size: 7.5pt;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 6pt;
+    line-height: 1.35;
+    max-width: 110px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     BADGES / PILLS
+     ═══════════════════════════════════════════════════════════ */
+  .badge {
+    display: inline-block;
+    padding: 2pt 8pt;
+    border-radius: 10pt;
+    font-size: 8pt;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    line-height: 1.6;
+  }
+
+  .badge-stage { background: #e3f2fd; color: #1565c0; border: 1px solid #bbdefb; }
+  .badge-decision-go { background: var(--go-green-bg); color: var(--go-green); border: 1px solid #c8e6c9; }
+  .badge-decision-hold { background: var(--hold-amber-bg); color: var(--hold-amber); border: 1px solid #ffe0b2; }
+  .badge-decision-kill { background: var(--kill-red-bg); color: var(--kill-red); border: 1px solid #ffcdd2; }
+  .badge-track { background: #e8eaf6; color: #283593; border: 1px solid #c5cae9; }
+  .badge-type { background: #f3e5f5; color: #6a1b9a; border: 1px solid #e1bee7; }
+  .badge-status { background: #fff8e1; color: #e65100; border: 1px solid #ffe082; }
+  .badge-bu { background: #e0f2f1; color: #00695c; border: 1px solid #b2dfdb; }
+  .badge-vertical { background: #fce4ec; color: #ad1457; border: 1px solid #f8bbd0; }
+  .badge-must { background: var(--kill-red-bg); color: var(--kill-red); font-size: 7.5pt; }
+  .badge-should { background: #fff8e1; color: #f57f17; font-size: 7.5pt; }
+  .badge-g42 { background: #e3f2fd; color: #1565c0; font-size: 7.5pt; }
+  .badge-affiliate { background: #e8f5e9; color: #2e7d32; font-size: 7.5pt; }
+
+  /* ═══════════════════════════════════════════════════════════
+     RED-FLAG INDICATORS
+     ═══════════════════════════════════════════════════════════ */
+  .flag-list { list-style: none; margin: 8pt 0; }
+
+  .flag-list li {
+    padding: 8pt 12pt;
+    margin-bottom: 4pt;
+    border-radius: var(--radius-sm);
+    border-left: 4px solid;
+    font-size: 9.5pt;
+  }
+
+  .flag-clear { border-color: var(--clear-green); background: #f1f8e9; }
+  .flag-warning { border-color: var(--warn-amber); background: #fff8e1; }
+  .flag-flagged { border-color: var(--flag-red); background: #fce4ec; }
+
+  .flag-icon { font-weight: 700; margin-right: 6pt; }
+
+  /* ═══════════════════════════════════════════════════════════
+     MS FORMS MOCKUP
+     ═══════════════════════════════════════════════════════════ */
+  .ms-forms-container {
+    background: var(--ms-purple-light);
+    border-radius: var(--radius-lg);
+    padding: 16pt;
+    margin: 12pt 0;
+  }
+
+  .ms-forms-header {
+    background: var(--ms-purple);
+    color: white;
+    padding: 20pt 24pt;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    position: relative;
+  }
+
+  .ms-forms-header h3 { color: white; margin: 0; font-size: 16pt; }
+  .ms-forms-header p { color: rgba(255,255,255,0.85); font-size: 9pt; margin-top: 4pt; }
+
+  .ms-forms-body {
+    background: white;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    padding: 20pt 24pt;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .ms-forms-section {
+    margin-bottom: 16pt;
+    padding-bottom: 12pt;
+    border-bottom: 1px solid #eee;
+  }
+
+  .ms-forms-section:last-child { border-bottom: none; }
+
+  .ms-forms-section-title {
+    font-size: 12pt;
+    font-weight: 700;
+    color: var(--ms-purple);
+    margin-bottom: 12pt;
+    padding-bottom: 4pt;
+    border-bottom: 2px solid var(--ms-purple);
+    display: inline-block;
+  }
+
+  .ms-field {
+    margin-bottom: 12pt;
+  }
+
+  .ms-field-label {
+    font-size: 9.5pt;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 4pt;
+    display: block;
+  }
+
+  .ms-field-label .required {
+    color: #d32f2f;
+    margin-left: 2pt;
+  }
+
+  .ms-field-hint {
+    font-size: 8pt;
+    color: #777;
+    margin-bottom: 4pt;
+    font-style: italic;
+  }
+
+  .ms-input {
+    width: 100%;
+    border: 1px solid #ccc;
+    border-bottom: 2px solid #ccc;
+    border-radius: 0;
+    padding: 8pt 10pt;
+    font-size: 9pt;
+    color: #999;
+    background: #fafafa;
+    font-family: inherit;
+  }
+
+  .ms-input:focus, .ms-input.active { border-bottom-color: var(--ms-purple); }
+
+  .ms-input.textarea {
+    min-height: 48pt;
+    resize: none;
+  }
+
+  .ms-dropdown {
+    width: 100%;
+    border: 1px solid #ccc;
+    border-bottom: 2px solid #ccc;
+    padding: 8pt 10pt;
+    font-size: 9pt;
+    color: #999;
+    background: #fafafa;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%23999'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10pt center;
+  }
+
+  .ms-radio-group, .ms-checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4pt;
+  }
+
+  .ms-radio, .ms-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6pt;
+    font-size: 9pt;
+    color: #555;
+  }
+
+  .ms-radio-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #999;
+    flex-shrink: 0;
+  }
+
+  .ms-checkbox-box {
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+    border: 2px solid #999;
+    flex-shrink: 0;
+  }
+
+  .ms-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 20pt;
+  }
+
+  .ms-fields-grid .ms-field.full-width {
+    grid-column: 1 / -1;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     KANBAN BOARD MOCKUP
+     ═══════════════════════════════════════════════════════════ */
+  .kanban-wrapper {
+    background: #f6f8fa;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14pt;
+    margin: 12pt 0;
+  }
+
+  .kanban-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8pt;
+    margin-bottom: 12pt;
+    padding-bottom: 10pt;
+    border-bottom: 1px solid var(--border);
+    font-size: 8.5pt;
+    color: var(--text-secondary);
+  }
+
+  .kanban-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4pt;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 3pt 8pt;
+    font-size: 8pt;
+  }
+
+  .kanban-filter-icon { color: var(--text-muted); }
+
+  .kanban-board {
+    display: flex;
+    gap: 8pt;
+    overflow-x: auto;
+  }
+
+  .kanban-column {
+    flex: 1;
+    min-width: 110px;
+    background: #eef1f5;
+    border-radius: var(--radius-md);
+    padding: 8pt;
+  }
+
+  .kanban-col-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8pt;
+    padding-bottom: 4pt;
+  }
+
+  .kanban-col-title {
+    font-size: 8.5pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+  }
+
+  .kanban-col-count {
+    font-size: 7.5pt;
+    background: #d0d5dd;
+    color: #555;
+    border-radius: 8pt;
+    padding: 1pt 6pt;
+    font-weight: 600;
+  }
+
+  .kanban-card {
+    background: white;
+    border-radius: var(--radius-sm);
+    padding: 8pt 10pt;
+    margin-bottom: 6pt;
+    box-shadow: var(--shadow-card);
+    border-left: 3px solid transparent;
+    font-size: 8pt;
+  }
+
+  .kanban-card.highlight { border-left-color: var(--g42-teal); }
+  .kanban-card.idea { border-left-color: #1976d2; }
+  .kanban-card.validate { border-left-color: var(--warn-amber); }
+
+  .kanban-card-title {
+    font-weight: 600;
+    font-size: 8.5pt;
+    color: var(--text-primary);
+    margin-bottom: 4pt;
+    line-height: 1.3;
+  }
+
+  .kanban-card-labels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3pt;
+    margin-top: 4pt;
+  }
+
+  .kanban-label {
+    font-size: 6.5pt;
+    padding: 1pt 5pt;
+    border-radius: 6pt;
+    font-weight: 600;
+  }
+
+  .kanban-card-meta {
+    font-size: 7pt;
+    color: var(--text-muted);
+    margin-top: 4pt;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     FLOW DIAGRAM
+     ═══════════════════════════════════════════════════════════ */
+  .flow-diagram {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin: 16pt 0;
+    flex-wrap: nowrap;
+  }
+
+  .flow-step {
+    background: white;
+    border: 2px solid var(--g42-deep);
+    border-radius: var(--radius-md);
+    padding: 10pt 12pt;
+    font-size: 8.5pt;
+    font-weight: 600;
+    text-align: center;
+    color: var(--g42-deep);
+    min-width: 90px;
+    line-height: 1.3;
+  }
+
+  .flow-step.highlight-step {
+    background: var(--g42-deep);
+    color: white;
+  }
+
+  .flow-step.teal-step {
+    background: var(--g42-teal);
+    color: white;
+    border-color: var(--g42-teal);
+  }
+
+  .flow-arrow {
+    font-size: 14pt;
+    color: var(--g42-teal);
+    padding: 0 4pt;
+    flex-shrink: 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     ASSESSMENT CARD
+     ═══════════════════════════════════════════════════════════ */
+  .assessment-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin: 12pt 0;
+    box-shadow: var(--shadow-md);
+  }
+
+  .assessment-header {
+    background: linear-gradient(135deg, var(--g42-deep), var(--g42-mid));
+    color: white;
+    padding: 14pt 18pt;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .assessment-header h4 { color: white; margin: 0; font-size: 12pt; }
+
+  .verdict-badge {
+    background: rgba(255,255,255,0.2);
+    color: white;
+    padding: 4pt 14pt;
+    border-radius: 14pt;
+    font-weight: 700;
+    font-size: 10pt;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+
+  .assessment-body { padding: 16pt 18pt; }
+
+  .assessment-section {
+    margin-bottom: 14pt;
+  }
+
+  .assessment-section h5 {
+    font-size: 10pt;
+    font-weight: 700;
+    color: var(--g42-deep);
+    margin-bottom: 6pt;
+    padding-bottom: 3pt;
+    border-bottom: 1px solid var(--border-light);
+  }
+
+  .assessment-section ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .assessment-section li {
+    padding: 3pt 0 3pt 14pt;
+    position: relative;
+    font-size: 9pt;
+    line-height: 1.45;
+  }
+
+  .assessment-section li::before {
+    content: '—';
+    position: absolute;
+    left: 0;
+    color: var(--g42-teal);
+    font-weight: 700;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     CALLOUT BOXES
+     ═══════════════════════════════════════════════════════════ */
+  .callout {
+    padding: 12pt 16pt;
+    border-radius: var(--radius-md);
+    margin: 10pt 0;
+    font-size: 9.5pt;
+  }
+
+  .callout-info {
+    background: #e3f2fd;
+    border-left: 4px solid var(--g42-accent);
+  }
+
+  .callout-warn {
+    background: #fff8e1;
+    border-left: 4px solid var(--warn-amber);
+  }
+
+  .callout-formula {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    font-family: 'Segoe UI', monospace;
+    text-align: center;
+    padding: 10pt;
+    font-size: 11pt;
+    font-weight: 600;
+    color: var(--g42-deep);
+    letter-spacing: 0.5px;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     TWO COLUMN LAYOUT
+     ═══════════════════════════════════════════════════════════ */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16pt;
+    margin: 10pt 0;
+  }
+
+  .col-box {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 14pt;
+  }
+
+  .col-box h4 { margin-top: 0; }
+
+  .col-box ul {
+    list-style: disc;
+    padding-left: 16pt;
+    font-size: 9pt;
+  }
+
+  .col-box li { margin-bottom: 3pt; }
+
+  /* ═══════════════════════════════════════════════════════════
+     CHECKLIST STYLING
+     ═══════════════════════════════════════════════════════════ */
+  .checklist {
+    list-style: none;
+    padding: 0;
+    margin: 8pt 0;
+  }
+
+  .checklist li {
+    padding: 5pt 0 5pt 22pt;
+    position: relative;
+    font-size: 9.5pt;
+    border-bottom: 1px dotted var(--border-light);
+  }
+
+  .checklist li::before {
+    content: '☐';
+    position: absolute;
+    left: 0;
+    color: var(--g42-teal);
+    font-size: 11pt;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     LABEL REFERENCE GRID
+     ═══════════════════════════════════════════════════════════ */
+  .label-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12pt;
+    margin: 12pt 0;
+  }
+
+  .label-group {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: 12pt;
+  }
+
+  .label-group h4 {
+    margin-top: 0;
+    font-size: 9.5pt;
+    margin-bottom: 6pt;
+  }
+
+  .label-group .badge { margin: 2pt 3pt 2pt 0; display: inline-block; }
+
+  /* ═══════════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+     ═══════════════════════════════════════════════════════════ */
+  .toc {
+    list-style: none;
+    padding: 0;
+  }
+
+  .toc li {
+    padding: 6pt 0;
+    border-bottom: 1px dotted var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5pt;
+  }
+
+  .toc li .toc-num {
+    font-weight: 700;
+    color: var(--g42-teal);
+    width: 28pt;
+    flex-shrink: 0;
+  }
+
+  .toc li .toc-title { flex: 1; font-weight: 500; }
+
+  .toc li .toc-page {
+    color: var(--text-muted);
+    font-size: 9pt;
+    flex-shrink: 0;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     STAGE HEADER BARS
+     ═══════════════════════════════════════════════════════════ */
+  .stage-header {
+    display: flex;
+    align-items: center;
+    gap: 10pt;
+    background: linear-gradient(90deg, var(--g42-deep), var(--g42-mid));
+    color: white;
+    padding: 10pt 16pt;
+    border-radius: var(--radius-md);
+    margin-bottom: 12pt;
+    margin-top: 20pt;
+  }
+
+  .stage-header .stage-num {
+    font-size: 24pt;
+    font-weight: 800;
+    opacity: 0.4;
+    line-height: 1;
+  }
+
+  .stage-header .stage-name {
+    font-size: 14pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .stage-header .stage-tagline {
+    font-size: 9pt;
+    opacity: 0.8;
+    font-weight: 400;
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     FOOTER
+     ═══════════════════════════════════════════════════════════ */
+  .page-footer {
+    text-align: center;
+    font-size: 7.5pt;
+    color: var(--text-muted);
+    padding-top: 12pt;
+    margin-top: 24pt;
+    border-top: 1px solid var(--border-light);
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     OWNER/PRIORITY MINI BADGES IN TABLES
+     ═══════════════════════════════════════════════════════════ */
+  td .badge { vertical-align: middle; }
+
+  /* Widths for checklist tables */
+  .checklist-table th:nth-child(1) { width: 28px; }
+  .checklist-table th:nth-child(4) { width: 72px; }
+  .checklist-table th:nth-child(5) { width: 62px; }
+
+  /* ═══════════════════════════════════════════════════════════
+     SCREENSHOT IMAGES
+     ═══════════════════════════════════════════════════════════ */
+  .screenshot-container {
+    margin: 14pt 0;
+    text-align: center;
+  }
+
+  .screenshot {
+    max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+  }
+
+  .screenshot-caption {
+    font-size: 8.5pt;
+    color: var(--text-muted);
+    margin-top: 6pt;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 1: TITLE PAGE
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="page title-page">
+  <div class="logo-area">G42 SaaS Factory</div>
+  <h1>Validation Engine Guide</h1>
+  <div class="doc-subtitle">Stage-Gate Governance, AI-Powered Triage &amp; Product Lifecycle Management</div>
+  <div class="title-meta">
+    <dl>
+      <dt>Date</dt>
+      <dd>February 2025</dd>
+    </dl>
+    <dl>
+      <dt>Version</dt>
+      <dd>1.0</dd>
+    </dl>
+    <dl>
+      <dt>Classification</dt>
+      <dd>Internal</dd>
+    </dl>
+    <dl>
+      <dt>Owner</dt>
+      <dd>G42 SaaS Factory</dd>
+    </dl>
+  </div>
+  <div class="bottom-bar"></div>
+  <div class="bottom-text">G42 GROUP &mdash; CONFIDENTIAL</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     TABLE OF CONTENTS
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <h2>Contents</h2>
+  <ul class="toc">
+    <li><span class="toc-num">1</span><span class="toc-title">Executive Summary</span></li>
+    <li><span class="toc-num">2</span><span class="toc-title">Idea Intake Form — Microsoft Forms</span></li>
+    <li><span class="toc-num">3</span><span class="toc-title">Validation Engine Stages</span></li>
+    <li><span class="toc-num" style="padding-left:16pt;">3.1</span><span class="toc-title">Stage 1: Ideate</span></li>
+    <li><span class="toc-num" style="padding-left:16pt;">3.2</span><span class="toc-title">Stage 2: Validate</span></li>
+    <li><span class="toc-num" style="padding-left:16pt;">3.3</span><span class="toc-title">Stage 3: Build</span></li>
+    <li><span class="toc-num" style="padding-left:16pt;">3.4</span><span class="toc-title">Stage 4: Sell</span></li>
+    <li><span class="toc-num" style="padding-left:16pt;">3.5</span><span class="toc-title">Stage 5: Review</span></li>
+    <li><span class="toc-num" style="padding-left:16pt;">3.6</span><span class="toc-title">Stage Transitions &amp; Email Notifications</span></li>
+    <li><span class="toc-num">4</span><span class="toc-title">Triage Board — GitHub Projects</span></li>
+    <li><span class="toc-num">5</span><span class="toc-title">AI-Powered Triage — Ideation Expert</span></li>
+    <li><span class="toc-num">6</span><span class="toc-title">Governance &amp; Label Reference</span></li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 2: EXECUTIVE SUMMARY
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <h2><span class="section-number">1</span> Executive Summary</h2>
+
+  <p>The G42 SaaS Factory operates a <strong>five-stage, stage-gate governance system</strong> that takes product ideas from initial nomination through validation, build, commercialisation, and continuous review. Every idea must pass defined entry criteria, complete stage-specific checklists, and clear an exit gate before advancing. The system is designed to ensure rigorous evaluation while maintaining velocity — only the strongest ideas with clear market evidence, sound unit economics, and accountable ownership progress to product development.</p>
+
+  <h3>Product Lifecycle Pipeline</h3>
+
+  <div class="pipeline">
+    <div class="pipeline-stage">
+      <div class="pipeline-box">Ideate</div>
+      <div class="pipeline-desc">Generate ideas with clear business value</div>
+    </div>
+    <div class="pipeline-arrow">&#8594;</div>
+    <div class="pipeline-stage">
+      <div class="pipeline-box">Validate</div>
+      <div class="pipeline-desc">Score, rank and decide: GO / HOLD / KILL</div>
+    </div>
+    <div class="pipeline-arrow">&#8594;</div>
+    <div class="pipeline-stage">
+      <div class="pipeline-box active">Build</div>
+      <div class="pipeline-desc">Develop functional SaaS products</div>
+    </div>
+    <div class="pipeline-arrow">&#8594;</div>
+    <div class="pipeline-stage">
+      <div class="pipeline-box">Sell</div>
+      <div class="pipeline-desc">Package offering, go to market</div>
+    </div>
+    <div class="pipeline-arrow">&#8594;</div>
+    <div class="pipeline-stage">
+      <div class="pipeline-box">Review</div>
+      <div class="pipeline-desc">Assess performance, iterate</div>
+    </div>
+  </div>
+
+  <h3>Stakeholder Accountability</h3>
+  <p>Three stakeholder groups share accountability across the lifecycle:</p>
+
+  <table>
+    <thead>
+      <tr><th>Stakeholder</th><th>Primary Role</th><th>Leads</th><th>Supports</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Business Units (BUs)</strong></td>
+        <td>Generate ideas, lead execution, drive sales</td>
+        <td>Ideate, Build, Sell</td>
+        <td>Validate, Review</td>
+      </tr>
+      <tr>
+        <td><strong>Group (G42 SaaS Factory)</strong></td>
+        <td>Provide templates, evaluate via Validation Engine, allocate ISE, define KPIs</td>
+        <td>Validate, Review</td>
+        <td>Ideate, Build, Sell</td>
+      </tr>
+      <tr>
+        <td><strong>Microsoft (MSFT)</strong></td>
+        <td>Validate via global vertical knowledge, co-build with ISE, activate Azure Marketplace</td>
+        <td>&mdash;</td>
+        <td>All stages</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Idea Types</h3>
+  <table class="compact">
+    <thead><tr><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-type">Greenfield</span></td><td>Completely new product idea</td></tr>
+      <tr><td><span class="badge badge-type">Brownfield</span></td><td>SaaSify an existing project or solution</td></tr>
+      <tr><td><span class="badge badge-type">White-label</span></td><td>Partner white-labeling opportunity</td></tr>
+    </tbody>
+  </table>
+
+  <h3>SaaS Readiness Tracks</h3>
+  <table class="compact">
+    <thead><tr><th>Track</th><th>Meaning</th><th>Implication</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-track">Track A</span></td><td>SaaS-ready — can be delivered as cloud-native SaaS on Azure</td><td>Fast-track to Build</td></tr>
+      <tr><td><span class="badge badge-track">Track B</span></td><td>Modernize-first — requires significant re-architecture</td><td>Additional modernisation epics before Build</td></tr>
+      <tr><td><span class="badge badge-status">Unknown</span></td><td>Readiness not yet assessed</td><td>Must be resolved during Validate</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 3: IDEA INTAKE FORM (MICROSOFT FORMS MOCKUP)
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <h2><span class="section-number">2</span> Idea Intake Form — Microsoft Forms</h2>
+  <p class="subtitle">The intake form captures all Template 1 fields, collecting structured data from BU submitters. Below is the complete 22-field form across 7 sections, as deployed in Microsoft Forms.</p>
+
+  <div class="ms-forms-container">
+    <div class="ms-forms-header">
+      <h3>G42 SaaS Idea Nomination</h3>
+      <p>Complete this form for every new idea. Keep responses concise and evidence-based. Fields marked with * are required.</p>
+    </div>
+
+    <div class="ms-forms-body">
+
+      <!-- Section 1: Basics -->
+      <div class="ms-forms-section">
+        <div class="ms-forms-section-title">1. Basics</div>
+        <div class="ms-fields-grid">
+          <div class="ms-field full-width">
+            <span class="ms-field-label">Idea Name <span class="required">*</span></span>
+            <div class="ms-input" style="color:#bbb;">Short, descriptive name for the idea</div>
+          </div>
+          <div class="ms-field">
+            <span class="ms-field-label">Affiliate / Business Unit <span class="required">*</span></span>
+            <div class="ms-dropdown">Select an option ▾</div>
+            <div class="ms-field-hint">Presight · Analog · Core42 · M42 · Inception · Astratech · Khazna · AIQ · CPX · Space42</div>
+          </div>
+          <div class="ms-field">
+            <span class="ms-field-label">Vertical <span class="required">*</span></span>
+            <div class="ms-dropdown">Select an option ▾</div>
+            <div class="ms-field-hint">Healthcare · Government · Financial Services · Cybersecurity · Education · Other</div>
+          </div>
+          <div class="ms-field full-width">
+            <span class="ms-field-label">Idea Type <span class="required">*</span></span>
+            <div class="ms-radio-group">
+              <label class="ms-radio"><span class="ms-radio-dot"></span> Greenfield (New idea)</label>
+              <label class="ms-radio"><span class="ms-radio-dot"></span> Brownfield (SaaSify existing project)</label>
+              <label class="ms-radio"><span class="ms-radio-dot"></span> White-label (Partner white-labeling)</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Problem & Solution -->
+      <div class="ms-forms-section">
+        <div class="ms-forms-section-title">2. Problem &amp; Solution</div>
+        <div class="ms-field">
+          <span class="ms-field-label">Problem Statement <span class="required">*</span></span>
+          <div class="ms-field-hint">What problem are we solving? For whom? Why now?</div>
+          <div class="ms-input textarea" style="color:#bbb;">Describe the problem, who has it, and why it's urgent...</div>
+        </div>
+        <div class="ms-fields-grid">
+          <div class="ms-field">
+            <span class="ms-field-label">Ideal Customer Profile (ICP) <span class="required">*</span></span>
+            <div class="ms-field-hint">Sector, size, geography, regulatory profile, buyer personas</div>
+            <div class="ms-input textarea" style="color:#bbb; min-height:36pt;">Sector: · Company size: · Geography: · Buyer personas:</div>
+          </div>
+          <div class="ms-field">
+            <span class="ms-field-label">Value Hypothesis <span class="required">*</span></span>
+            <div class="ms-field-hint">Quantified outcome: cost reduction, compliance, time saved, revenue</div>
+            <div class="ms-input textarea" style="color:#bbb; min-height:36pt;">Describe the quantified value this solution delivers...</div>
+          </div>
+        </div>
+        <div class="ms-fields-grid">
+          <div class="ms-field">
+            <span class="ms-field-label">Proposed Solution <span class="required">*</span></span>
+            <div class="ms-input" style="color:#bbb;">1-2 sentences describing your proposed solution</div>
+          </div>
+          <div class="ms-field">
+            <span class="ms-field-label">Differentiation <span class="required">*</span></span>
+            <div class="ms-input textarea" style="color:#bbb; min-height:36pt;">Why G42? Why Azure? Competitive advantage</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: Market & Evidence -->
+      <div class="ms-forms-section">
+        <div class="ms-forms-section-title">3. Market &amp; Evidence</div>
+        <div class="ms-field">
+          <span class="ms-field-label">Success Metrics (Initial) <span class="required">*</span></span>
+          <div class="ms-field-hint">North-star metric + 3-5 leading indicators</div>
+          <div class="ms-input textarea" style="color:#bbb;">North-star metric: · Leading indicators: 1. 2. 3.</div>
+        </div>
+        <div class="ms-fields-grid">
+          <div class="ms-field">
+            <span class="ms-field-label">Expected Business Value <span class="required">*</span></span>
+            <div class="ms-dropdown">Select an option ▾</div>
+            <div class="ms-field-hint">High (&gt;$10M) · Medium ($1M–$10M) · Low (&lt;$1M)</div>
+          </div>
+          <div class="ms-field">
+            <span class="ms-field-label">Customer Evidence Available <span class="required">*</span></span>
+            <div class="ms-dropdown">Select an option ▾</div>
+            <div class="ms-field-hint">Existing pipeline · Existing customers · None</div>
+          </div>
+        </div>
+        <div class="ms-field">
+          <span class="ms-field-label">Target Market / Customers <span class="required">*</span></span>
+          <div class="ms-input textarea" style="color:#bbb;">Describe the target market and customer segments...</div>
+        </div>
+      </div>
+
+      <!-- Section 4: Technical Readiness -->
+      <div class="ms-forms-section">
+        <div class="ms-forms-section-title">4. Technical Readiness</div>
+        <div class="ms-field">
+          <span class="ms-field-label">SaaS Readiness (Initial) <span class="required">*</span></span>
+          <div class="ms-radio-group">
+            <label class="ms-radio"><span class="ms-radio-dot"></span> Track A — SaaS-ready</label>
+            <label class="ms-radio"><span class="ms-radio-dot"></span> Track B — Modernize-first</label>
+            <label class="ms-radio"><span class="ms-radio-dot"></span> Unknown</label>
+          </div>
+        </div>
+        <div class="ms-field">
+          <span class="ms-field-label">Key Constraints</span>
+          <div class="ms-field-hint">Data residency, regulated requirements, integrations, latency, sovereignty constraints</div>
+          <div class="ms-input textarea" style="color:#bbb;">List any key constraints...</div>
+        </div>
+      </div>
+
+      <!-- Section 5: Requested Support -->
+      <div class="ms-forms-section">
+        <div class="ms-forms-section-title">5. Requested Support</div>
+        <div class="ms-fields-grid">
+          <div class="ms-field">
+            <span class="ms-field-label">Requested Support — Microsoft</span>
+            <div class="ms-checkbox-group">
+              <label class="ms-checkbox"><span class="ms-checkbox-box"></span> Field validation</label>
+              <label class="ms-checkbox"><span class="ms-checkbox-box"></span> Marketplace guidance</label>
+              <label class="ms-checkbox"><span class="ms-checkbox-box"></span> Co-sell</label>
+              <label class="ms-checkbox"><span class="ms-checkbox-box"></span> ACR mapping</label>
+            </div>
+          </div>
+          <div class="ms-field">
+            <span class="ms-field-label">Requested Support — Microsoft ISE</span>
+            <div class="ms-checkbox-group">
+              <label class="ms-checkbox"><span class="ms-checkbox-box"></span> Feasibility assessment</label>
+              <label class="ms-checkbox"><span class="ms-checkbox-box"></span> Accelerators</label>
+              <label class="ms-checkbox"><span class="ms-checkbox-box"></span> Engineering capacity</label>
+              <label class="ms-checkbox"><span class="ms-checkbox-box"></span> Other</label>
+            </div>
+          </div>
+        </div>
+        <div class="ms-field">
+          <span class="ms-field-label">Requested Support — G42 SaaS Factory</span>
+          <div class="ms-input textarea" style="color:#bbb;">Identity/tenant mgmt, metering, observability, CI/CD templates...</div>
+        </div>
+      </div>
+
+      <!-- Section 6: Planning & Ownership -->
+      <div class="ms-forms-section">
+        <div class="ms-forms-section-title">6. Planning &amp; Ownership</div>
+        <div class="ms-fields-grid">
+          <div class="ms-field">
+            <span class="ms-field-label">Initial Resource Estimate</span>
+            <div class="ms-input textarea" style="color:#bbb; min-height:36pt;">Provide rough estimates...</div>
+          </div>
+          <div class="ms-field">
+            <span class="ms-field-label">Named Owners <span class="required">*</span></span>
+            <div class="ms-input textarea" style="color:#bbb; min-height:36pt;">G42 PO: · Affiliate PO: · Eng Lead:</div>
+          </div>
+        </div>
+        <div class="ms-field">
+          <span class="ms-field-label">Proposed Timeline</span>
+          <div class="ms-input" style="color:#bbb;">e.g., MVP: Q2 2026 / GA: Q4 2026</div>
+        </div>
+      </div>
+
+      <!-- Section 7: Submitter Info -->
+      <div class="ms-forms-section">
+        <div class="ms-forms-section-title">7. Submitter Information</div>
+        <div class="ms-fields-grid">
+          <div class="ms-field">
+            <span class="ms-field-label">Submitter Name <span class="required">*</span></span>
+            <div class="ms-input" style="color:#bbb;">Your name</div>
+          </div>
+          <div class="ms-field">
+            <span class="ms-field-label">Submitter Email <span class="required">*</span></span>
+            <div class="ms-input" style="color:#bbb;">your.email@g42.ai</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 4: VALIDATION ENGINE STAGES
+     ═══════════════════════════════════════════════════════════════ -->
+
+<!-- ── STAGE 1: IDEATE ─────────────────────────────────────────── -->
+<div class="page page-break">
+  <h2><span class="section-number">3</span> Validation Engine Stages</h2>
+
+  <div class="stage-header">
+    <span class="stage-num">01</span>
+    <div>
+      <div class="stage-name">Ideate</div>
+      <div class="stage-tagline">Generate a long list of ideas with clear business value</div>
+    </div>
+  </div>
+
+  <h4>Entry Criteria</h4>
+  <ul class="checklist">
+    <li>Idea submitted via approved channel (Microsoft Forms or GitHub issue template)</li>
+    <li>BU sponsor identified</li>
+  </ul>
+
+  <h4>Template 1 — Idea Intake Form (17 Fields)</h4>
+  <table class="compact">
+    <thead><tr><th>#</th><th>Field</th><th>Guidance</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Idea name</td><td>Short, descriptive name</td></tr>
+      <tr><td>2</td><td>Affiliate / BU</td><td>Submitting business unit</td></tr>
+      <tr><td>3</td><td>Vertical</td><td>Healthcare, Government, Financial Services, Cybersecurity, Education, Other</td></tr>
+      <tr><td>4</td><td>Problem statement</td><td>What problem are we solving? For whom? Why now?</td></tr>
+      <tr><td>5</td><td>Ideal Customer Profile (ICP)</td><td>Sector, size, geography, regulatory profile, buyer personas</td></tr>
+      <tr><td>6</td><td>Value hypothesis</td><td>Quantified outcome: cost reduction, compliance, time saved, revenue</td></tr>
+      <tr><td>7</td><td>Success metrics (initial)</td><td>North-star metric + 3–5 leading indicators</td></tr>
+      <tr><td>8</td><td>Proposed solution</td><td>Solution summary (1–2 sentences)</td></tr>
+      <tr><td>9</td><td>Differentiation</td><td>Why G42? Why Azure? Competitive advantage</td></tr>
+      <tr><td>10</td><td>SaaS readiness (initial)</td><td>Track A / Track B / Unknown</td></tr>
+      <tr><td>11</td><td>Key constraints</td><td>Data residency, compliance, integrations, latency, sovereignty</td></tr>
+      <tr><td>12</td><td>Customer evidence available</td><td>Existing pipeline / existing customers / none</td></tr>
+      <tr><td>13</td><td>Requested support — Microsoft</td><td>Field validation / Marketplace / Co-sell / ACR mapping</td></tr>
+      <tr><td>14</td><td>Requested support — Microsoft ISE</td><td>Feasibility / Accelerators / Engineering capacity</td></tr>
+      <tr><td>15</td><td>Requested support — G42 SaaS Factory</td><td>Identity/tenant mgmt, metering, observability, CI/CD</td></tr>
+      <tr><td>16</td><td>Proposed timeline</td><td>Target MVP date / Target GA date</td></tr>
+      <tr><td>17</td><td>Named owners</td><td>G42 PO, Affiliate PO, Engineering Lead</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Submission Completeness Check</h4>
+  <p>All five items must be confirmed before the idea is accepted into the pipeline:</p>
+  <table class="compact">
+    <thead><tr><th>#</th><th>Check</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Problem statement is clear and specific (not generic)</td></tr>
+      <tr><td>2</td><td>ICP (Ideal Customer Profile) is well-defined with specific personas</td></tr>
+      <tr><td>3</td><td>Success metrics are proposed and measurable</td></tr>
+      <tr><td>4</td><td>Constraints captured (data residency, compliance, integrations)</td></tr>
+      <tr><td>5</td><td>Named owners assigned (not TBD or placeholder names)</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Exit Criteria</h4>
+  <ul class="checklist">
+    <li>All submission completeness check items confirmed</li>
+    <li>Admin approval granted to advance to Validate</li>
+  </ul>
+</div>
+
+<!-- ── STAGE 2: VALIDATE ────────────────────────────────────────── -->
+<div class="page page-break">
+  <div class="stage-header">
+    <span class="stage-num">02</span>
+    <div>
+      <div class="stage-name">Validate</div>
+      <div class="stage-tagline">Prioritise ideas based on G42 market potential and effort assessments</div>
+    </div>
+  </div>
+
+  <h4>Stakeholder Responsibilities</h4>
+  <table class="compact">
+    <thead><tr><th>Stakeholder</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><strong>BUs</strong></td><td>Provide information as required</td></tr>
+      <tr><td><strong>Group</strong></td><td>Evaluate against the Validation Engine</td></tr>
+      <tr><td><strong>MSFT</strong></td><td>Support information provision and field validation</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Prioritization Scorecard (100 points)</h3>
+  <p>Each of the 14 criteria is scored 0–5. The score is converted to weighted points:</p>
+  <div class="callout callout-formula">Weighted pts = (Score ÷ 5) × Weight &nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp; All weights must sum to 100</div>
+
+  <h4>Category: Market &amp; Strategic Fit</h4>
+  <table class="scorecard compact">
+    <thead><tr><th>#</th><th>Criterion</th><th>Evidence Required (minimum)</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Problem severity &amp; urgency</td><td>Validated pain; urgency drivers; clear buyer</td></tr>
+      <tr><td>2</td><td>Repeatability across customers</td><td>Clear repeatable use case; not bespoke</td></tr>
+      <tr><td>3</td><td>Design partners / pipeline evidence</td><td>2–3 design partners or credible pipeline</td></tr>
+      <tr><td>4</td><td>Strategic alignment</td><td>Aligned to priority verticals / strategic mandates</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Category: Commercial &amp; Economics</h4>
+  <table class="scorecard compact">
+    <thead><tr><th>#</th><th>Criterion</th><th>Evidence Required (minimum)</th></tr></thead>
+    <tbody>
+      <tr><td>5</td><td>Pricing power / willingness to pay</td><td>WTP signal; pricing band tested</td></tr>
+      <tr><td>6</td><td>Margin potential (COGS + cost-to-serve)</td><td>COGS drivers understood; gross margin path</td></tr>
+      <tr><td>7</td><td>Sales motion feasibility</td><td>Direct / partner / co-sell path defined</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Category: Technical &amp; Delivery Feasibility</h4>
+  <table class="scorecard compact">
+    <thead><tr><th>#</th><th>Criterion</th><th>Evidence Required (minimum)</th></tr></thead>
+    <tbody>
+      <tr><td>8</td><td>SaaS readiness / complexity</td><td>Track A/B decided; key epics identified</td></tr>
+      <tr><td>9</td><td>Security &amp; compliance feasibility</td><td>Threat model v1; control mapping; evidence plan</td></tr>
+      <tr><td>10</td><td>Operability (SRE readiness)</td><td>SLOs, DR approach, run ownership feasible</td></tr>
+      <tr><td>11</td><td>Integration complexity</td><td>Integration map; known dependencies</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Category: Partnership Leverage (Microsoft / ISE)</h4>
+  <table class="scorecard compact">
+    <thead><tr><th>#</th><th>Criterion</th><th>Evidence Required (minimum)</th></tr></thead>
+    <tbody>
+      <tr><td>12</td><td>Microsoft field verification strength</td><td>Field input; account relevance; objections</td></tr>
+      <tr><td>13</td><td>Marketplace readiness path clarity</td><td>Listing requirements and path understood</td></tr>
+      <tr><td>14</td><td>ISE accelerator fit / engineering leverage</td><td>ISE scope / accelerators identified</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Decision Thresholds</h4>
+  <table class="compact threshold-table">
+    <thead><tr><th>Total Score</th><th>Recommendation</th><th>Track</th></tr></thead>
+    <tbody>
+      <tr><td>&ge; 80</td><td><span class="badge badge-decision-go">GO (Fast-track)</span></td><td>Track A — SaaS-ready</td></tr>
+      <tr><td>65 – 79</td><td><span class="badge badge-decision-go">GO (Modernize-first)</span></td><td>Track B — Conditional</td></tr>
+      <tr><td>50 – 64</td><td><span class="badge badge-decision-hold">HOLD (evidence gaps)</span></td><td>Paused</td></tr>
+      <tr><td>&lt; 50</td><td><span class="badge badge-decision-kill">KILL</span></td><td>Rejected</td></tr>
+      <tr><td>Any + red-flag</td><td><span class="badge badge-decision-hold">HOLD (red-flag override)</span></td><td>Auto-hold</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-warn">
+    <strong>Note:</strong> If fewer than 14 criteria are scored, the result is <strong>INCOMPLETE</strong> — all criteria must be scored for a valid result.
+  </div>
+</div>
+
+<!-- ── VALIDATE: RED FLAGS & TEMPLATES ──────────────────────────── -->
+<div class="page page-break">
+  <h3>Red-Flag Overrides (Auto-HOLD)</h3>
+  <p>If <strong>any</strong> of the following conditions is true, the recommendation is automatically set to <strong>HOLD</strong> regardless of the total score. The hold persists until the red flag is resolved.</p>
+
+  <ul class="flag-list">
+    <li class="flag-flagged"><span class="flag-icon">1.</span> <strong>No viable tenancy or data isolation approach</strong> for target segment — the product cannot provide adequate data separation or multi-tenancy</li>
+    <li class="flag-flagged"><span class="flag-icon">2.</span> <strong>No design partner or pilot path</strong> — no identified design partner, pilot customer, or credible path to early customer engagement</li>
+    <li class="flag-flagged"><span class="flag-icon">3.</span> <strong>No accountable product owner</strong> — no named individual has accepted accountability for the product's success</li>
+    <li class="flag-flagged"><span class="flag-icon">4.</span> <strong>Unit economics structurally negative</strong> — cost structure fundamentally exceeds revenue potential with no mitigation path</li>
+  </ul>
+
+  <h3>Gate Decision Types</h3>
+  <table class="compact">
+    <thead><tr><th>Decision</th><th>Meaning</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge badge-decision-go">GO Fast-track</span></td><td>SaaS-ready, proceed directly to Build</td><td>Track A plan initiated</td></tr>
+      <tr><td><span class="badge badge-decision-go">GO Modernize-first</span></td><td>Approved with mandatory modernisation epics</td><td>Track B plan initiated</td></tr>
+      <tr><td><span class="badge badge-decision-hold">HOLD</span></td><td>Paused pending resolution of evidence gaps or red flags</td><td>Remains in Validate</td></tr>
+      <tr><td><span class="badge badge-decision-kill">KILL</span></td><td>Idea rejected; no further investment</td><td>Issue closed</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Validation Templates (2–5)</h3>
+  <table>
+    <thead><tr><th>Template</th><th>Name</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><strong>2</strong></td><td>Market Verification Pack</td><td>Confirm demand, urgency, willingness to adopt/pay, route-to-market. Joint effort between G42 and Microsoft. Sections: executive summary, G42 market evidence, Microsoft market verification, GTM motion hypothesis.</td></tr>
+      <tr><td><strong>3</strong></td><td>Technical Evaluation Pack</td><td>Confirm SaaS feasibility on Azure, identify delivery approach, surface risks. Sections: current state, target SaaS model, security feasibility, operability, SaaS readiness classification.</td></tr>
+      <tr><td><strong>4</strong></td><td>Business Plan (Lite)</td><td>Quantify value, validate commercial viability, define investment ask. Sections: executive summary, market size, financial model, ACR logic, risks, investment ask.</td></tr>
+      <tr><td><strong>5</strong></td><td>Final Recommendation Memo</td><td>Document a defensible gate decision. Fields: decision, rationale, scorecard result, red-flag check, conditions to proceed, dependencies, investment ask, target dates, named owners.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Exit Criteria</h4>
+  <ul class="checklist">
+    <li>Positive GO decision recorded</li>
+    <li>Prioritisation complete (scorecard finalised, rank assigned)</li>
+    <li>Resources allocated for Build stage</li>
+  </ul>
+</div>
+
+<!-- ── STAGE 3: BUILD ──────────────────────────────────────────── -->
+<div class="page page-break">
+  <div class="stage-header">
+    <span class="stage-num">03</span>
+    <div>
+      <div class="stage-name">Build</div>
+      <div class="stage-tagline">Develop functional SaaS products ready to market</div>
+    </div>
+  </div>
+
+  <h4>Stakeholder Responsibilities</h4>
+  <table class="compact">
+    <thead><tr><th>Stakeholder</th><th>Role</th></tr></thead>
+    <tbody>
+      <tr><td><strong>BUs</strong></td><td>Lead product execution</td></tr>
+      <tr><td><strong>Group</strong></td><td>Allocate ISE Engineers, enforce governance</td></tr>
+      <tr><td><strong>MSFT</strong></td><td>Co-build, ensure Product-Led Growth execution</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Product Intake Checklist (27 Items, 8 Sections)</h3>
+
+  <h4>Business (4 items)</h4>
+  <table class="compact checklist-table">
+    <thead><tr><th>#</th><th>Checklist Item</th><th>Acceptance Criteria</th><th>Owner</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Problem statement &amp; ICP defined</td><td>Clear target industry/segment, buyer/user personas, primary use cases, differentiation vs alternatives</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>2</td><td>Market validation evidence</td><td>Customer interviews/pilots, referenceable design partners, quantified pain, WTP signal</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-should">Should</span></td></tr>
+      <tr><td>3</td><td>Product positioning &amp; messaging</td><td>One-page positioning: value prop, key messages, competitor map, proof points</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>4</td><td>Regulatory constraints identified</td><td>Data residency, sector regulations, customer requirements captured with impact on tenancy</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h4>Product Management (3 items)</h4>
+  <table class="compact checklist-table">
+    <thead><tr><th>#</th><th>Checklist Item</th><th>Acceptance Criteria</th><th>Owner</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>5</td><td>Product strategy &amp; 12–18 month roadmap</td><td>Strategic goals, themes, quarterly OKRs, measurable outcomes; aligned to portfolio priorities</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>6</td><td>PRD / user journeys / backlog</td><td>PRD with user journeys, NFRs, acceptance criteria, prioritised backlog</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>7</td><td>Stage-gate plan and launch readiness</td><td>Gate 0–4 milestones, owners, dates; launch checklist (SLO/SLA, support, security, pricing, legal)</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h4>Technology (4 items)</h4>
+  <table class="compact checklist-table">
+    <thead><tr><th>#</th><th>Checklist Item</th><th>Acceptance Criteria</th><th>Owner</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>8</td><td>Target architecture for Azure SaaS</td><td>Reference architecture selected; core services; integration points; scalability and cost</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>9</td><td>Tenancy model selected</td><td>Multi-tenant, single-tenant, or hybrid; isolation boundaries; provisioning lifecycle</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>10</td><td>Data partitioning and access controls</td><td>Tenant-aware data model; least-privilege access; row/partition isolation; auditability</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>11</td><td>API strategy &amp; versioning</td><td>API-first interfaces; authN/authZ; versioning and deprecation policy; docs published</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-should">Should</span></td></tr>
+    </tbody>
+  </table>
+
+  <h4>DevOps (4 items)</h4>
+  <table class="compact checklist-table">
+    <thead><tr><th>#</th><th>Checklist Item</th><th>Acceptance Criteria</th><th>Owner</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>12</td><td>CI/CD pipeline aligned to golden pipeline</td><td>Automated build/test, security scans, artifact versioning, approvals, env promotions</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>13</td><td>Infrastructure as Code (IaC) &amp; landing zones</td><td>Repeatable deployments; dev/test/prod separation; policy-as-code enforcement</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>14</td><td>Observability implemented</td><td>Logs/metrics/traces with dashboards; alerting tied to SLOs; runbooks and on-call</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>15</td><td>DR/BCP and RTO/RPO defined and tested</td><td>Documented RTO/RPO per tier; backups; failover procedures; periodic testing</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-should">Should</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── BUILD CONTINUED: Security, Finance, Commercials, Operations ── -->
+<div class="page page-break">
+  <h4>Security (4 items)</h4>
+  <table class="compact checklist-table">
+    <thead><tr><th>#</th><th>Checklist Item</th><th>Acceptance Criteria</th><th>Owner</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>16</td><td>Security baseline alignment</td><td>MFA, RBAC, secrets management, encryption in transit/at rest, secure SDLC, audit logging</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>17</td><td>Threat model completed and reviewed</td><td>Threat model, mitigations, residual risk sign-off; exceptions documented with expiry</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>18</td><td>Pen test / vulnerability remediation plan</td><td>Pre-launch pen test; remediation tracked; patch SLAs defined; evidence retained</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>19</td><td>Compliance mapping &amp; evidence pack</td><td>Controls mapped to standards; evidence collection plan; continuous compliance dashboarding</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-should">Should</span></td></tr>
+    </tbody>
+  </table>
+
+  <h4>Finance (2 items)</h4>
+  <table class="compact checklist-table">
+    <thead><tr><th>#</th><th>Checklist Item</th><th>Acceptance Criteria</th><th>Owner</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>20</td><td>Business case &amp; unit economics</td><td>Pricing assumptions, TAM/SAM/SOM, forecast, Azure COGS model, gross margin targets</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>21</td><td>FinOps controls configured</td><td>Budgets, alerts, tagging, cost allocation (showback/chargeback), reserved capacity</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-should">Should</span></td></tr>
+    </tbody>
+  </table>
+
+  <h4>Commercials (4 items)</h4>
+  <table class="compact checklist-table">
+    <thead><tr><th>#</th><th>Checklist Item</th><th>Acceptance Criteria</th><th>Owner</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>22</td><td>SKU packaging &amp; tiering</td><td>Defined SKUs, tiers, add-ons; feature entitlements and limits documented</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>23</td><td>Metering &amp; billing instrumentation</td><td>Usage events captured, rated, reconciled; invoice/export integration path defined</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>24</td><td>Contract set ready (MSA/DPA/SLA)</td><td>Standard contract templates populated; service credits and obligations defined</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-must">Must</span></td></tr>
+      <tr><td>25</td><td>Support model and SLAs</td><td>Support tiers (L1–L3), response/restore targets, escalation, customer success motions</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-must">Must</span></td></tr>
+    </tbody>
+  </table>
+
+  <h4>Operations (2 items)</h4>
+  <table class="compact checklist-table">
+    <thead><tr><th>#</th><th>Checklist Item</th><th>Acceptance Criteria</th><th>Owner</th><th>Priority</th></tr></thead>
+    <tbody>
+      <tr><td>26</td><td>Runbooks and operational readiness review</td><td>Operational readiness completed; runbooks, KB articles, monitoring, incident playbooks</td><td><span class="badge badge-affiliate">Affiliate</span></td><td><span class="badge badge-should">Should</span></td></tr>
+      <tr><td>27</td><td>Customer onboarding &amp; provisioning workflow</td><td>Standard tenant provisioning, onboarding checklist, training materials, admin guides</td><td><span class="badge badge-g42">G42</span></td><td><span class="badge badge-should">Should</span></td></tr>
+    </tbody>
+  </table>
+
+  <h4>Intake Checklist Summary</h4>
+  <table class="compact">
+    <thead><tr><th>Section</th><th>Items</th><th>Must</th><th>Should</th><th>G42</th><th>Affiliate</th></tr></thead>
+    <tbody>
+      <tr><td>Business</td><td>4</td><td>3</td><td>1</td><td>2</td><td>2</td></tr>
+      <tr><td>Product Management</td><td>3</td><td>3</td><td>0</td><td>2</td><td>1</td></tr>
+      <tr><td>Technology</td><td>4</td><td>3</td><td>1</td><td>2</td><td>2</td></tr>
+      <tr><td>DevOps</td><td>4</td><td>3</td><td>1</td><td>2</td><td>2</td></tr>
+      <tr><td>Security</td><td>4</td><td>3</td><td>1</td><td>2</td><td>2</td></tr>
+      <tr><td>Finance</td><td>2</td><td>1</td><td>1</td><td>2</td><td>0</td></tr>
+      <tr><td>Commercials</td><td>4</td><td>4</td><td>0</td><td>3</td><td>1</td></tr>
+      <tr><td>Operations</td><td>2</td><td>0</td><td>2</td><td>1</td><td>1</td></tr>
+      <tr style="font-weight:700; background:#e3f2fd;">
+        <td><strong>Total</strong></td><td><strong>27</strong></td><td><strong>20</strong></td><td><strong>7</strong></td><td><strong>16</strong></td><td><strong>11</strong></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── BUILD: TEMPLATES 6 & 7 ──────────────────────────────────── -->
+<div class="page page-break">
+  <h4>Template 6 — Product Documentation Pack</h4>
+  <p>Attach this checklist to every GO recommendation. All items must be created or explicitly waived with rationale.</p>
+  <table class="compact">
+    <thead><tr><th>#</th><th>Document</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Product one-pager (problem, ICP, value, KPIs)</td></tr>
+      <tr><td>2</td><td>PRD-lite (MVP scope, journeys, acceptance criteria)</td></tr>
+      <tr><td>3</td><td>Architecture outline + tenancy decision record</td></tr>
+      <tr><td>4</td><td>Security feasibility pack (threat model v1 + evidence plan)</td></tr>
+      <tr><td>5</td><td>Commercial spec (pricing/packaging v1 + tier definitions)</td></tr>
+      <tr><td>6</td><td>Delivery plan (milestones, resourcing, risks, dependencies)</td></tr>
+      <tr><td>7</td><td>Operational readiness plan (SLOs, DR, runbooks, support model)</td></tr>
+      <tr><td>8</td><td>Marketplace readiness plan (if applicable)</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Template 7 — Product Roadmap (12–18 months)</h4>
+  <table>
+    <thead><tr><th>Phase</th><th>Timeframe</th><th>Outcome</th><th>Key Capabilities</th></tr></thead>
+    <tbody>
+      <tr><td><strong>MVP</strong></td><td>0–90 days</td><td>Minimum viable product delivered</td><td>Core features for design partner validation</td></tr>
+      <tr><td><strong>GA</strong></td><td>90–180 days</td><td>General availability release</td><td>Full feature set, security hardened, marketplace-listed</td></tr>
+      <tr><td><strong>Scale</strong></td><td>6–12 months</td><td>Growth and expansion</td><td>Multi-region, advanced features, partner integrations</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Exit Criteria</h4>
+  <ul class="checklist">
+    <li>Product is functional and meets quality standards</li>
+    <li>All "Must" checklist items complete (or explicitly waived with rationale)</li>
+    <li>Product Documentation Pack (Template 6) delivered</li>
+    <li>Ready for market release</li>
+  </ul>
+
+  <!-- ── STAGES 4 & 5 ───────────────────────────────────────────── -->
+  <div class="stage-header" style="margin-top:24pt;">
+    <span class="stage-num">04</span>
+    <div>
+      <div class="stage-name">Sell</div>
+      <div class="stage-tagline">Package product offering with services and add-ons</div>
+    </div>
+  </div>
+
+  <table class="compact">
+    <thead><tr><th>#</th><th>Item</th><th>Details</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Pricing model defined</td><td>Pricing tiers established, licensing model confirmed, discount policies set</td></tr>
+      <tr><td>2</td><td>Sales collateral created</td><td>Product datasheets, demo scripts, case studies (if available)</td></tr>
+      <tr><td>3</td><td>Azure Marketplace listing</td><td>Listing created/approved, transact capability enabled, co-sell ready status</td></tr>
+      <tr><td>4</td><td>Partner channel activated</td><td>Partner agreements in place, enablement completed, joint marketing planned</td></tr>
+      <tr><td>5</td><td>First customers acquired</td><td>Pilot customers onboarded, reference customers identified, revenue recognised</td></tr>
+    </tbody>
+  </table>
+
+  <div class="stage-header">
+    <span class="stage-num">05</span>
+    <div>
+      <div class="stage-name">Review</div>
+      <div class="stage-tagline">Assess product performance and iterate to improve</div>
+    </div>
+  </div>
+
+  <table class="compact">
+    <thead><tr><th>KPI Category</th><th>Metrics</th></tr></thead>
+    <tbody>
+      <tr><td>Revenue</td><td>ARR, MRR, growth rate</td></tr>
+      <tr><td>Customers</td><td>Count, retention rate, NPS</td></tr>
+      <tr><td>Product</td><td>Usage, adoption, feature utilisation</td></tr>
+      <tr><td>Operations</td><td>Uptime, support tickets, resolution time</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── STAGE TRANSITION SUMMARY ─────────────────────────────────── -->
+<div class="page page-break">
+  <h3>Stage Transition Summary</h3>
+  <table>
+    <thead><tr><th>From</th><th>To</th><th>Entry Requirements</th><th>Key Gate Artefacts</th></tr></thead>
+    <tbody>
+      <tr><td>—</td><td><span class="badge badge-stage">Ideate</span></td><td>Idea submitted via MS Forms or GitHub; BU sponsor identified</td><td>Template 1 (Idea Intake Form)</td></tr>
+      <tr><td><span class="badge badge-stage">Ideate</span></td><td><span class="badge badge-stage">Validate</span></td><td>All 5 submission completeness checks confirmed; admin approval</td><td>Completed intake form</td></tr>
+      <tr><td><span class="badge badge-stage">Validate</span></td><td><span class="badge badge-stage">Build</span></td><td>Positive GO decision; prioritisation complete; resources allocated</td><td>Template 5 (Memo), Scorecard, Templates 2–4</td></tr>
+      <tr><td><span class="badge badge-stage">Build</span></td><td><span class="badge badge-stage">Sell</span></td><td>Product functional; quality approved; documentation ready</td><td>Template 6 (Doc Pack), Template 7 (Roadmap)</td></tr>
+      <tr><td><span class="badge badge-stage">Sell</span></td><td><span class="badge badge-stage">Review</span></td><td>Product actively sold; revenue generated; customers onboarded</td><td>Sales collateral, Marketplace listing</td></tr>
+      <tr><td><span class="badge badge-stage">Review</span></td><td>(Continuous)</td><td>Ongoing performance monitoring and iteration</td><td>KPI dashboards, improvement roadmap</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Automated Email Notifications</h3>
+  <p>When an idea transitions between stages, the submitter automatically receives an email notification. The system sends branded HTML emails via GitHub Actions, keeping stakeholders informed of progress without manual follow-up.</p>
+
+  <div class="screenshot-container">
+    <img src="images/email-notification-hq.jpg" alt="Stage transition email notification" class="screenshot">
+    <div class="screenshot-caption">Figure 2: Automated email notification sent to the submitter when SCTAP advanced from Validate to Build</div>
+  </div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 5: TRIAGE BOARD (GITHUB PROJECTS MOCKUP)
+     ═══════════════════════════════════════════════════════════════ -->
+  <h2 style="margin-top:28pt;"><span class="section-number">4</span> Triage Board — GitHub Projects</h2>
+  <p class="subtitle">The SaaS Factory Board provides a kanban view of all ideas across the lifecycle. Custom fields enable multi-dimensional filtering and prioritization.</p>
+
+  <div class="screenshot-container">
+    <img src="images/board-screenshot.png" alt="SaaS Factory Board — GitHub Projects" class="screenshot">
+    <div class="screenshot-caption">Figure 1: SaaS Factory Board on GitHub Projects — SCTAP idea in Build stage</div>
+  </div>
+
+  <div class="kanban-wrapper">
+    <!-- Toolbar -->
+    <div class="kanban-toolbar">
+      <strong style="color:var(--text-primary); font-size:10pt;">SaaS Factory Board</strong>
+      <span style="margin-left:auto;">Filter by:</span>
+      <span class="kanban-filter"><span class="kanban-filter-icon">&#9662;</span> Stage</span>
+      <span class="kanban-filter"><span class="kanban-filter-icon">&#9662;</span> Business Unit</span>
+      <span class="kanban-filter"><span class="kanban-filter-icon">&#9662;</span> Priority</span>
+      <span class="kanban-filter"><span class="kanban-filter-icon">&#9662;</span> Vertical</span>
+      <span class="kanban-filter"><span class="kanban-filter-icon">&#9662;</span> Type</span>
+    </div>
+
+    <!-- Board -->
+    <div class="kanban-board">
+      <!-- Backlog -->
+      <div class="kanban-column">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">Backlog</span>
+          <span class="kanban-col-count">1</span>
+        </div>
+        <div class="kanban-card">
+          <div class="kanban-card-title">[IDEA] Smart Building Energy Optimizer</div>
+          <div class="kanban-card-labels">
+            <span class="kanban-label badge-bu">bu:core42</span>
+            <span class="kanban-label badge-type">type:greenfield</span>
+          </div>
+          <div class="kanban-card-meta"><span>Medium</span><span>#28</span></div>
+        </div>
+      </div>
+
+      <!-- Ideate -->
+      <div class="kanban-column">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">Ideate</span>
+          <span class="kanban-col-count">2</span>
+        </div>
+        <div class="kanban-card idea">
+          <div class="kanban-card-title">[IDEA] Maritime Logistics Intelligence</div>
+          <div class="kanban-card-labels">
+            <span class="kanban-label badge-stage">stage:ideate</span>
+            <span class="kanban-label badge-bu">bu:space42</span>
+          </div>
+          <div class="kanban-card-meta"><span>High</span><span>#31</span></div>
+        </div>
+        <div class="kanban-card idea">
+          <div class="kanban-card-title">[IDEA] EdTech Assessment Platform</div>
+          <div class="kanban-card-labels">
+            <span class="kanban-label badge-stage">stage:ideate</span>
+            <span class="kanban-label badge-bu">bu:inception</span>
+          </div>
+          <div class="kanban-card-meta"><span>Low</span><span>#33</span></div>
+        </div>
+      </div>
+
+      <!-- Validate -->
+      <div class="kanban-column">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">Validate</span>
+          <span class="kanban-col-count">1</span>
+        </div>
+        <div class="kanban-card validate">
+          <div class="kanban-card-title">[IDEA] GovCloud Document AI</div>
+          <div class="kanban-card-labels">
+            <span class="kanban-label badge-stage">stage:validate</span>
+            <span class="kanban-label badge-bu">bu:presight</span>
+            <span class="kanban-label badge-vertical">vertical:gov</span>
+          </div>
+          <div class="kanban-card-meta"><span>High</span><span>#22</span></div>
+        </div>
+      </div>
+
+      <!-- Build (highlighted - SCTAP) -->
+      <div class="kanban-column" style="background:#e0f2f1;">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title" style="color:var(--g42-teal);">Build</span>
+          <span class="kanban-col-count" style="background:var(--g42-teal);color:white;">1</span>
+        </div>
+        <div class="kanban-card highlight" style="border-left-width:4px;">
+          <div class="kanban-card-title">[IDEA] Sovereign Clinical Trial Analytics Platform (SCTAP)</div>
+          <div class="kanban-card-labels">
+            <span class="kanban-label badge-stage">stage:build</span>
+            <span class="kanban-label badge-bu">bu:m42</span>
+            <span class="kanban-label badge-type">type:greenfield</span>
+            <span class="kanban-label badge-vertical">vertical:healthcare</span>
+            <span class="kanban-label badge-track">track:a</span>
+          </div>
+          <div class="kanban-card-meta"><span>Medium ($1M–$10M)</span><span>#25</span></div>
+        </div>
+      </div>
+
+      <!-- Sell -->
+      <div class="kanban-column">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">Sell</span>
+          <span class="kanban-col-count">0</span>
+        </div>
+      </div>
+
+      <!-- Review -->
+      <div class="kanban-column">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">Review</span>
+          <span class="kanban-col-count">0</span>
+        </div>
+      </div>
+
+      <!-- Rejected -->
+      <div class="kanban-column" style="background:#fce4ec;">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title" style="color:var(--kill-red);">Rejected</span>
+          <span class="kanban-col-count" style="background:var(--kill-red);color:white;">0</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <h4>Custom Fields</h4>
+  <table class="compact">
+    <thead><tr><th>Field</th><th>Type</th><th>Values</th></tr></thead>
+    <tbody>
+      <tr><td>Stage</td><td>Single select</td><td>Backlog, Ideate, Validate, Build, Sell, Review, Rejected</td></tr>
+      <tr><td>Business Unit</td><td>Label</td><td>Presight, Analog, Core42, M42, Inception, Astratech, Khazna, AIQ, CPX, Space42</td></tr>
+      <tr><td>Idea Type</td><td>Label</td><td>Greenfield, Brownfield, White-label</td></tr>
+      <tr><td>Priority</td><td>Single select</td><td>High, Medium, Low</td></tr>
+      <tr><td>Business Value Score</td><td>Number</td><td>0–100 (from prioritization scorecard)</td></tr>
+      <tr><td>Effort Score</td><td>Single select</td><td>S, M, L, XL (T-shirt sizing)</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 6: AI IDEATION EXPERT ASSESSMENT
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <h2><span class="section-number">5</span> AI-Powered Triage — Ideation Expert</h2>
+  <p class="subtitle">Every new idea submission automatically triggers an AI-powered assessment that evaluates the submission against the Validation Engine criteria, identifies gaps, researches competitors, and checks for red-flag conditions.</p>
+
+  <h3>How It Works</h3>
+  <div class="flow-diagram">
+    <div class="flow-step">Issue<br>Opened</div>
+    <div class="flow-arrow">&#8594;</div>
+    <div class="flow-step highlight-step">GitHub Actions<br>Trigger</div>
+    <div class="flow-arrow">&#8594;</div>
+    <div class="flow-step teal-step">Claude API<br>Call</div>
+    <div class="flow-arrow">&#8594;</div>
+    <div class="flow-step">Structured<br>Assessment<br>Comment</div>
+    <div class="flow-arrow">&#8594;</div>
+    <div class="flow-step highlight-step">Label Applied<br><span style="font-size:7pt;opacity:0.8;">status:ai-reviewed</span></div>
+  </div>
+
+  <h3>Assessment Output Format</h3>
+  <table class="compact">
+    <thead><tr><th>Section</th><th>Content</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Verdict</strong></td><td>Strong / Promising / Needs Work / Concerns — overall quality signal</td></tr>
+      <tr><td><strong>Strengths</strong></td><td>What's well-articulated in the submission — specific positives referencing actual content</td></tr>
+      <tr><td><strong>Gaps &amp; Recommendations</strong></td><td>What's missing or vague — actionable recommendations to strengthen the idea</td></tr>
+      <tr><td><strong>Competitive Landscape</strong></td><td>2–3 existing competitors or similar solutions in the market</td></tr>
+      <tr><td><strong>Red-Flag Check</strong></td><td>Status of each of the 4 red-flag conditions: Clear / Warning / Flagged</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Live Assessment: SCTAP Submission (Issue #25)</h3>
+  <p>The following is the actual AI assessment generated automatically when the SCTAP idea was submitted. The assessment was posted as a comment on Issue #25 within minutes of submission.</p>
+
+  <div class="assessment-card">
+    <div class="assessment-header">
+      <h4>AI Ideation Expert Assessment</h4>
+      <span class="verdict-badge">Concerns</span>
+    </div>
+    <div class="assessment-body">
+      <div class="assessment-section">
+        <h5>Strengths</h5>
+        <ul>
+          <li>Exceptionally detailed submission with specific GCC regulatory context (MOHAP, SFDA, ADHICS)</li>
+          <li>Clear sovereign data residency differentiation leveraging G42's Jais AI and Azure UAE/Qatar regions</li>
+          <li>Well-defined ICP with specific buyer personas and revenue thresholds ($100M+ pharma/CROs)</li>
+          <li>Quantified value hypothesis (40% time reduction, $2M ARR target)</li>
+          <li>Strong technical architecture vision using Azure Health Data Services and Confidential Computing</li>
+        </ul>
+      </div>
+
+      <div class="assessment-section">
+        <h5>Gaps &amp; Recommendations</h5>
+        <ul>
+          <li><strong>Critical Gap:</strong> No named owners (marked TBD) — this is a red-flag condition requiring immediate resolution</li>
+          <li>Timeline appears aggressive (MVP Q3 2026) given the complexity of healthcare compliance and AI model fine-tuning</li>
+          <li>"Existing pipeline" customer evidence is vague — need specific design partner commitments from named organizations</li>
+          <li>Missing unit economics and customer acquisition cost analysis for specialized healthcare vertical</li>
+          <li>Should validate technical feasibility of real-time Arabic medical text processing with current Jais model capabilities</li>
+        </ul>
+      </div>
+
+      <div class="assessment-section">
+        <h5>Competitive Landscape</h5>
+        <ul>
+          <li><strong>Medidata (Dassault Syst&egrave;mes)</strong> — Market leader in clinical trial management platforms, strong in US/EU but limited GCC presence</li>
+          <li><strong>Veeva Vault Clinical</strong> — End-to-end clinical suite with global pharma relationships, but no sovereign deployment options</li>
+          <li><strong>Oracle Health Sciences Cloud</strong> — Enterprise clinical data management with regulatory compliance tools, US-hosted only</li>
+        </ul>
+      </div>
+
+      <div class="assessment-section">
+        <h5>Red-Flag Check</h5>
+      </div>
+      <ul class="flag-list" style="margin-top:-6pt;">
+        <li class="flag-clear"><span class="flag-icon">&#10003;</span> <strong>Tenancy / Data Isolation</strong> — Clear tenancy approach (Azure multi-tenant with confidential computing)</li>
+        <li class="flag-warning"><span class="flag-icon">&#9888;</span> <strong>Design Partner / Pilot Path</strong> — Warning on design partners (pipeline claimed but no named commitments)</li>
+        <li class="flag-flagged"><span class="flag-icon">&#10007;</span> <strong>Accountable Product Owner</strong> — Flagged — No accountable product owner assigned</li>
+        <li class="flag-clear"><span class="flag-icon">&#10003;</span> <strong>Unit Economics</strong> — Clear unit economics path with defined ARR targets</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ── AI ASSESSMENT: STRENGTHS & LIMITATIONS ───────────────────── -->
+<div class="page page-break">
+  <h3>Assessment Approach — Strengths &amp; Limitations</h3>
+
+  <div class="two-col">
+    <div class="col-box" style="border-top:3px solid var(--clear-green);">
+      <h4 style="color:var(--clear-green);">Strengths</h4>
+      <ul>
+        <li><strong>Automated first-pass</strong> saves board members 30–60 minutes per submission review</li>
+        <li><strong>Consistent application</strong> of evaluation criteria across all submissions — no reviewer fatigue or bias</li>
+        <li><strong>Competitive landscape research</strong> adds immediate market context that submitters often omit</li>
+        <li><strong>Red-flag detection</strong> catches critical gaps early (e.g., TBD owners, missing design partners)</li>
+        <li><strong>Structured output format</strong> enables quick comparison across ideas and standardized board discussion</li>
+        <li><strong>Immediate feedback</strong> — assessment posted within minutes of submission, enabling rapid iteration</li>
+      </ul>
+    </div>
+    <div class="col-box" style="border-top:3px solid var(--warn-amber);">
+      <h4 style="color:var(--warn-amber);">Limitations</h4>
+      <ul>
+        <li><strong>Cannot validate customer evidence claims</strong> — pipeline and design partner claims are taken at face value</li>
+        <li><strong>Competitive landscape based on training data</strong> — may miss recent market entrants or pivots</li>
+        <li><strong>No access to internal G42 financials</strong> or strategic priorities — cannot assess portfolio-level fit</li>
+        <li><strong>Cannot interview stakeholders</strong> or probe vague responses — assessment quality depends on submission quality</li>
+        <li><strong>No scoring capability</strong> — provides qualitative assessment but does not generate the 100-point prioritization score</li>
+        <li><strong>Garbage in, garbage out</strong> — a well-written but fundamentally flawed idea may receive an optimistic assessment</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Technical Implementation</h3>
+  <table class="compact">
+    <thead><tr><th>Component</th><th>Details</th></tr></thead>
+    <tbody>
+      <tr><td>Trigger</td><td>GitHub Actions <code>on: issues: types: [opened]</code> — fires when any issue is created</td></tr>
+      <tr><td>Filter</td><td>Only runs when issue body contains "SaaS Product Idea Nomination"</td></tr>
+      <tr><td>AI Model</td><td>Claude Sonnet (AI-powered assessment engine)</td></tr>
+      <tr><td>Context</td><td>Full issue body + title passed as user prompt; evaluation criteria embedded in system prompt</td></tr>
+      <tr><td>Output</td><td>Structured markdown comment posted to the issue; <code>status:ai-reviewed</code> label applied</td></tr>
+      <tr><td>Max Tokens</td><td>1,500 tokens — sufficient for 200–300 word assessment</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Workflow File</h3>
+  <div class="callout callout-info">
+    <strong>Location:</strong> <code>.github/workflows/ideation-expert.yml</code><br>
+    <strong>Permissions:</strong> <code>contents: read</code>, <code>issues: write</code>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     SECTION 7: GOVERNANCE & LABELS
+     ═══════════════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <h2><span class="section-number">6</span> Governance &amp; Label Reference</h2>
+
+  <h3>Label Taxonomy</h3>
+  <div class="label-grid">
+    <div class="label-group">
+      <h4>Stage Labels</h4>
+      <span class="badge badge-stage">stage:ideate</span>
+      <span class="badge badge-stage">stage:validate</span>
+      <span class="badge badge-stage">stage:build</span>
+      <span class="badge badge-stage">stage:sell</span>
+      <span class="badge badge-stage">stage:review</span>
+    </div>
+    <div class="label-group">
+      <h4>Decision Labels</h4>
+      <span class="badge badge-decision-go">decision:go-fast-track</span>
+      <span class="badge badge-decision-go">decision:go-modernize</span>
+      <span class="badge badge-decision-hold">decision:hold</span>
+      <span class="badge badge-decision-kill">decision:kill</span>
+    </div>
+    <div class="label-group">
+      <h4>Track Labels</h4>
+      <span class="badge badge-track">track:a-saas-ready</span>
+      <span class="badge badge-track">track:b-modernize-first</span>
+    </div>
+    <div class="label-group">
+      <h4>Status Labels</h4>
+      <span class="badge badge-status">status:needs-info</span>
+      <span class="badge badge-status">status:blocked</span>
+      <span class="badge badge-status">status:ready-for-review</span>
+      <span class="badge" style="background:#fce4ec;color:#c62828;border:1px solid #f8bbd0;">status:red-flag</span>
+      <span class="badge" style="background:#e8f5e9;color:#2e7d32;border:1px solid #c8e6c9;">status:ai-reviewed</span>
+    </div>
+    <div class="label-group">
+      <h4>Idea Type Labels</h4>
+      <span class="badge badge-type">type:greenfield</span>
+      <span class="badge badge-type">type:brownfield</span>
+      <span class="badge badge-type">type:whitelabel</span>
+    </div>
+    <div class="label-group">
+      <h4>Vertical Labels</h4>
+      <span class="badge badge-vertical">vertical:healthcare</span>
+      <span class="badge badge-vertical">vertical:government</span>
+      <span class="badge badge-vertical">vertical:financial-services</span>
+      <span class="badge badge-vertical">vertical:cybersecurity</span>
+      <span class="badge badge-vertical">vertical:education</span>
+      <span class="badge badge-vertical">vertical:other</span>
+    </div>
+    <div class="label-group">
+      <h4>Business Unit Labels</h4>
+      <span class="badge badge-bu">bu:presight</span>
+      <span class="badge badge-bu">bu:analog</span>
+      <span class="badge badge-bu">bu:core42</span>
+      <span class="badge badge-bu">bu:m42</span>
+      <span class="badge badge-bu">bu:inception</span>
+      <span class="badge badge-bu">bu:astratech</span>
+      <span class="badge badge-bu">bu:khazna</span>
+      <span class="badge badge-bu">bu:aiq</span>
+      <span class="badge badge-bu">bu:cpx</span>
+      <span class="badge badge-bu">bu:space42</span>
+    </div>
+    <div class="label-group">
+      <h4>Stakeholder Labels</h4>
+      <span class="badge" style="background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;">stakeholder:bu</span>
+      <span class="badge" style="background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;">stakeholder:group</span>
+      <span class="badge" style="background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;">stakeholder:msft</span>
+    </div>
+  </div>
+
+  <h3>Governance Rules</h3>
+
+  <h4>1. Scope Change Control</h4>
+  <p>All scope changes must flow through the product governance cadence. No direct ad hoc engineering requests are permitted.</p>
+
+  <h4>2. Decision Record Requirements</h4>
+  <p>Every gate decision must record:</p>
+  <ul class="checklist">
+    <li>Conditions to proceed (with owners and due dates)</li>
+    <li>Named owners (G42 PO, Affiliate PO, Eng Lead, CS Lead, Security Lead)</li>
+    <li>Capacity plan (resourcing and FTE allocation)</li>
+    <li>Explicit external dependencies (Microsoft/ISE and affiliates)</li>
+  </ul>
+
+  <h4>3. Template Workflow</h4>
+  <table class="compact">
+    <thead><tr><th>Action</th><th>Templates</th></tr></thead>
+    <tbody>
+      <tr><td>Every idea submitted</td><td>Complete <strong>Template 1</strong></td></tr>
+      <tr><td>Ideas advanced to Validate</td><td>Complete <strong>Templates 2–4</strong> with supporting evidence</td></tr>
+      <tr><td>Gate decision</td><td>Produce <strong>Template 5</strong> and attach <strong>Template 6</strong> (documentation checklist)</td></tr>
+      <tr><td>GO decisions</td><td>Publish roadmap using <strong>Template 7</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="page-footer">
+    G42 SaaS Factory — Validation Engine Guide v1.0 &nbsp;|&nbsp; February 2025 &nbsp;|&nbsp; Internal &amp; Confidential
+  </div>
+</div>
+
+</body>
+</html>

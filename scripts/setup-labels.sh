@@ -2,7 +2,7 @@
 # Setup GitHub Labels for G42 SaaS Factory Board
 # Run this script once after creating the repository
 
-REPO="akaddour/G42_SaaS_Factory_Board"
+REPO="${1:?Usage: setup-labels.sh <org/repo>}"
 
 echo "Setting up labels for $REPO..."
 
