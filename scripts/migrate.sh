@@ -165,13 +165,55 @@ echo "  Labels created."
 echo ""
 echo "=== Step 6: Creating project board ==="
 
-PROJECT_JSON=$(gh project create --owner "${TARGET_ORG}" --title "SaaS Factory Board" --format json)
-NEW_PROJECT_ID=$(echo "$PROJECT_JSON" | jq -r '.id')
-PROJECT_NUMBER=$(echo "$PROJECT_JSON" | jq -r '.number')
+# Create project — capture URL from text output (more reliable on GHE)
+PROJECT_OUTPUT=$(gh project create --owner "${TARGET_ORG}" --title "SaaS Factory Board" 2>&1)
+echo "$PROJECT_OUTPUT"
+
+# Try --format json first for project details, fall back to gh project list
+PROJECT_JSON=$(gh project list --owner "${TARGET_ORG}" --format json --jq '.projects[] | select(.title == "SaaS Factory Board")' 2>/dev/null || true)
+
+if [ -n "$PROJECT_JSON" ]; then
+  NEW_PROJECT_ID=$(echo "$PROJECT_JSON" | jq -r '.id')
+  PROJECT_NUMBER=$(echo "$PROJECT_JSON" | jq -r '.number')
+else
+  # Fall back to GraphQL query to find the project
+  echo "  Querying project via GraphQL..."
+  PROJECT_QUERY='query($owner: String!) {
+    organization(login: $owner) {
+      projectsV2(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
+        nodes { id number title }
+      }
+    }
+  }'
+  PROJECT_DATA=$(gh api graphql -f query="$PROJECT_QUERY" -f owner="${TARGET_ORG}" --jq '.data.organization.projectsV2.nodes[] | select(.title == "SaaS Factory Board")' 2>/dev/null || true)
+
+  if [ -z "$PROJECT_DATA" ]; then
+    # Try as user instead of org
+    PROJECT_QUERY='query($owner: String!) {
+      user(login: $owner) {
+        projectsV2(first: 10, orderBy: {field: CREATED_AT, direction: DESC}) {
+          nodes { id number title }
+        }
+      }
+    }'
+    PROJECT_DATA=$(gh api graphql -f query="$PROJECT_QUERY" -f owner="${TARGET_ORG}" --jq '.data.user.projectsV2.nodes[] | select(.title == "SaaS Factory Board")')
+  fi
+
+  NEW_PROJECT_ID=$(echo "$PROJECT_DATA" | jq -r '.id')
+  PROJECT_NUMBER=$(echo "$PROJECT_DATA" | jq -r '.number')
+fi
+
 PROJECT_URL="https://${GH_HOST}/${URL_PREFIX}/${TARGET_ORG}/projects/${PROJECT_NUMBER}"
 
 echo "  Project created: ${PROJECT_URL}"
 echo "  Project ID: ${NEW_PROJECT_ID}"
+echo "  Project Number: ${PROJECT_NUMBER}"
+
+if [ -z "$NEW_PROJECT_ID" ] || [ "$NEW_PROJECT_ID" = "null" ]; then
+  echo "Error: Could not determine project ID. Create the project board manually."
+  echo "  Then update workflow files with the project IDs."
+  exit 1
+fi
 
 # Add Stage single-select field
 echo "  Adding Stage field..."
@@ -181,7 +223,7 @@ gh project field-create "$PROJECT_NUMBER" --owner "${TARGET_ORG}" \
 
 # Query field and option IDs via GraphQL
 echo "  Querying field and option IDs..."
-GRAPHQL_QUERY='query($projectId: ID!) {
+FIELD_QUERY='query($projectId: ID!) {
   node(id: $projectId) {
     ... on ProjectV2 {
       field(name: "Stage") {
@@ -197,7 +239,7 @@ GRAPHQL_QUERY='query($projectId: ID!) {
   }
 }'
 
-FIELD_DATA=$(gh api graphql -f query="$GRAPHQL_QUERY" -f projectId="$NEW_PROJECT_ID" --jq '.data.node.field')
+FIELD_DATA=$(gh api graphql -f query="$FIELD_QUERY" -f projectId="$NEW_PROJECT_ID" --jq '.data.node.field')
 NEW_STAGE_FIELD_ID=$(echo "$FIELD_DATA" | jq -r '.id')
 NEW_BACKLOG_ID=$(echo "$FIELD_DATA" | jq -r '.options[] | select(.name == "Backlog") | .id')
 NEW_IDEATE_ID=$(echo "$FIELD_DATA" | jq -r '.options[] | select(.name == "Ideate") | .id')
